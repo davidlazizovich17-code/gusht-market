@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go'sht Market — Qora ro'yxat</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title"><i class="fa-solid fa-ban" style="color:var(--red-light)"></i> Qora ro'yxat</div>
+    </div>
+
+    <div class="content">
+      <div class="alert alert-red">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Qora ro'yxatdagi mijozlarga <strong>yangi qarz yozib bo'lmaydi.</strong> Blokdan chiqarish uchun tugmani bosing.
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fa-solid fa-ban" style="color:var(--overdue)"></i> Bloklangan mijozlar <span id="blockCount" style="color:var(--text2);font-weight:400;font-size:13px"></span></div>
+        </div>
+        <div class="card-body" id="blacklistBody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="telegram.js"></script>
+<script>
+DB.checkLogin();
+const TYPE = DB.getType();
+if (!TYPE) throw new Error('no type');
+TG.startPolling();
+
+document.getElementById('sidebar').innerHTML = DB.buildSidebar(TYPE, 'blacklist');
+
+function render() {
+  const blocked = DB.getCustomers(TYPE).filter(c => c.blocked);
+  document.getElementById('blockCount').textContent = `(${blocked.length} ta)`;
+
+  const body = document.getElementById('blacklistBody');
+  if (!blocked.length) {
+    body.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-ban"></i></div><p>Bloklangan mijozlar yo'q</p></div>`;
+    return;
+  }
+
+  const rows = blocked.map(c => {
+    const debt = DB.getCustomerDebt(TYPE, c.id);
+    return `<tr class="blacklisted-row">
+      <td><strong>${c.name}</strong></td>
+      <td>${c.phone}</td>
+      <td><strong style="color:var(--overdue)">${DB.fmt(debt)}</strong></td>
+      <td>${c.blockDate ? DB.fmtDate(c.blockDate) : '—'}</td>
+      <td>${c.blockReason || '—'}</td>
+      <td>
+        <button class="btn btn-sm btn-unblock" onclick="unblock('${c.id}')">
+          <i class="fa-solid fa-lock-open"></i> Blokdan chiqar
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `<table>
+    <thead><tr><th>Ism</th><th>Telefon</th><th>Umumiy qarz</th><th>Bloklangan sana</th><th>Sabab</th><th>Amal</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function unblock(id) {
+  if (confirm("Bu mijozni qora ro'yxatdan chiqarasizmi?")) {
+    const c = DB.getCustomers(TYPE).find(x => x.id === id);
+    DB.unblockCustomer(TYPE, id);
+    if (c) TG.notifyUnblock(DB.getTypeName(TYPE), c.name);
+    render();
+  }
+}
+
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go'sht Market — Kirish</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+<div class="login-page">
+  <div class="login-box">
+    <div class="login-logo">
+      <div class="login-icon-wrap"><i class="fa-solid fa-drumstick-bite"></i></div>
+      <h1>Go'sht Market</h1>
+      <p>Qarz boshqaruv tizimi</p>
+    </div>
+
+    <div class="login-error" id="loginError">
+      <i class="fa-solid fa-triangle-exclamation"></i> Login yoki parol noto'g'ri!
+    </div>
+
+    <div class="form-group">
+      <label><i class="fa-solid fa-user"></i> Login</label>
+      <input type="text" id="loginInput" placeholder="admin" autocomplete="username">
+    </div>
+    <div class="form-group">
+      <label><i class="fa-solid fa-lock"></i> Parol</label>
+      <input type="password" id="passInput" placeholder="••••••" autocomplete="current-password">
+    </div>
+    <button class="btn-login" onclick="doLogin()">
+      <i class="fa-solid fa-right-to-bracket"></i> Kirish
+    </button>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script>
+  if (sessionStorage.getItem('gm_auth')) location.href = 'select.html';
+
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+  function doLogin() {
+    const u = document.getElementById('loginInput').value.trim();
+    const p = document.getElementById('passInput').value;
+    const err = document.getElementById('loginError');
+    if (DB.login(u, p)) {
+      location.href = 'select.html';
+    } else {
+      err.style.display = 'flex';
+      document.getElementById('passInput').value = '';
+      document.getElementById('passInput').focus();
+    }
+  }
+</script>
+</body>
+</html>

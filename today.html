@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go'sht Market — Bugungi</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title"><i class="fa-solid fa-calendar-day" style="color:var(--red-light)"></i> Bugungi hisobot</div>
+      <div class="topbar-right">
+        <span class="topbar-date" id="todayDate"></span>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-receipt"></i></div>
+          <div class="stat-label">Bugungi qarzlar</div>
+          <div class="stat-value red" id="statDebts">0</div>
+          <div class="stat-sub">ta yozildi</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-icon"><i class="fa-solid fa-weight-scale"></i></div>
+          <div class="stat-label" id="statKgLabel">Sotilgan go'sht</div>
+          <div class="stat-value" id="statKg">0</div>
+          <div class="stat-sub" id="statKgSub">kg jami</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+          <div class="stat-label">Bugungi to'lovlar</div>
+          <div class="stat-value green" id="statPayments">0</div>
+          <div class="stat-sub">so'm</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-icon"><i class="fa-solid fa-receipt"></i></div>
+          <div class="stat-label">Bugungi qarz summasi</div>
+          <div class="stat-value yellow" id="statDebtTotal">0</div>
+          <div class="stat-sub">so'm</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fa-solid fa-receipt" style="color:var(--red-light)"></i> Bugun yozilgan qarzlar</div>
+        </div>
+        <div class="card-body" id="todayDebtsBody"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fa-solid fa-circle-check" style="color:var(--green)"></i> Bugun qabul qilingan to'lovlar</div>
+        </div>
+        <div class="card-body" id="todayPaymentsBody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="telegram.js"></script>
+<script>
+DB.checkLogin();
+const TYPE = DB.getType();
+if (!TYPE) throw new Error('no type');
+TG.startPolling();
+
+document.getElementById('sidebar').innerHTML = DB.buildSidebar(TYPE, 'today');
+document.getElementById('todayDate').textContent = new Date().toLocaleDateString('uz-UZ', {
+  year: 'numeric', month: 'long', day: 'numeric', weekday: 'long'
+});
+
+function render() {
+  const today = new Date().toDateString();
+
+  const todayDebts = DB.getDebts(TYPE).filter(d => new Date(d.createdAt).toDateString() === today);
+  const todayPayments = DB.getPayments(TYPE).filter(p => new Date(p.createdAt).toDateString() === today);
+
+  // For postoyanniy type kg is always 1 (no meat weight concept), so only count real meat debts
+  const meatDebts = todayDebts.filter(d => d.meatType);
+  const totalKg = meatDebts.reduce((s, d) => s + d.kg, 0);
+  const totalDebt = todayDebts.reduce((s, d) => s + d.total, 0);
+  const totalPaid = todayPayments.reduce((s, p) => s + p.amount, 0);
+
+  document.getElementById('statDebts').textContent = todayDebts.length;
+  if (TYPE === 'postoyanniy') {
+    document.getElementById('statKgLabel').textContent = "Bugungi qarz yig'indisi";
+    document.getElementById('statKgSub').textContent = "so'm";
+    document.getElementById('statKg').textContent = DB.fmt(totalDebt);
+  } else {
+    document.getElementById('statKg').textContent = totalKg % 1 === 0 ? totalKg : totalKg.toFixed(1);
+  }
+  document.getElementById('statPayments').textContent = DB.fmt(totalPaid);
+  document.getElementById('statDebtTotal').textContent = DB.fmt(totalDebt);
+
+  // Today debts
+  const debtsBody = document.getElementById('todayDebtsBody');
+  if (!todayDebts.length) {
+    debtsBody.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-receipt"></i></div><p>Bugun qarz yozilmagan</p></div>`;
+  } else {
+    const rows = todayDebts.slice().reverse().map(d => `
+      <tr>
+        <td><strong>#${d.num}</strong></td>
+        <td><strong>${d.customerName}</strong></td>
+        <td>${d.meatType ? `<span class="meat-tag"><i class="fa-solid fa-drumstick-bite"></i> ${d.meatType}</span>` : '<span style="color:var(--text2)">—</span>'}</td>
+        <td>${d.meatType ? d.kg + ' kg' : '—'}</td>
+        <td><strong>${DB.fmt(d.total)}</strong></td>
+        <td style="color:var(--text2)">${DB.fmtTime(d.createdAt)}</td>
+      </tr>`).join('');
+    debtsBody.innerHTML = `<table>
+      <thead><tr><th>#</th><th>Mijoz</th><th>Go'sht turi</th><th>Miqdor</th><th>Summa</th><th>Vaqt</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+
+  // Today payments
+  const paymentsBody = document.getElementById('todayPaymentsBody');
+  if (!todayPayments.length) {
+    paymentsBody.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-circle-check"></i></div><p>Bugun to'lov qabul qilinmagan</p></div>`;
+  } else {
+    const rows = todayPayments.slice().reverse().map((p, i) => `
+      <tr>
+        <td>${i + 1}</td>
+        <td><strong>${p.customerName}</strong></td>
+        <td><strong style="color:var(--green)">${DB.fmt(p.amount)}</strong></td>
+        <td>#${p.debtNum}</td>
+        <td style="color:var(--text2)">${DB.fmtTime(p.createdAt)}</td>
+      </tr>`).join('');
+    paymentsBody.innerHTML = `<table>
+      <thead><tr><th>#</th><th>Mijoz</th><th>To'lov miqdori</th><th>Qarz #</th><th>Vaqt</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+  }
+}
+
+render();
+</script>
+</body>
+</html>

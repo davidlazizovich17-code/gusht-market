@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go'sht Market — Qarzlar</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title"><i class="fa-solid fa-receipt" style="color:var(--red-light)"></i> Qarzlar</div>
+      <div class="topbar-right">
+        <button class="btn btn-primary btn-sm" onclick="openDebtModal()">
+          <i class="fa-solid fa-plus"></i> Qarz yozish
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div class="alert alert-red" id="overdueAlert" style="display:none">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        <span id="overdueAlertText"></span>
+      </div>
+
+      <div class="search-bar">
+        <input class="search-input" type="text" id="searchInput" placeholder="Mijoz ismi bo'yicha qidirish..." oninput="renderDebts()">
+        <select id="filterStatus" onchange="renderDebts()" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;outline:none;min-width:160px">
+          <option value="">Barchasi</option>
+          <option value="unpaid">To'lanmagan</option>
+          <option value="overdue">2+ oy o'tgan</option>
+          <option value="paid">To'langan</option>
+        </select>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fa-solid fa-receipt" style="color:var(--red-light)"></i> Barcha qarzlar <span id="debtCount" style="color:var(--text2);font-weight:400;font-size:13px"></span></div>
+        </div>
+        <div class="card-body" id="debtsBody"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD DEBT MODAL -->
+<div class="modal-overlay" id="debtModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-receipt"></i> Yangi qarz yozish</div>
+      <button class="modal-close" onclick="closeModal('debtModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="debtModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('debtModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-primary" onclick="saveDebt()"><i class="fa-solid fa-floppy-disk"></i> Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- PAY MODAL -->
+<div class="modal-overlay" id="payModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-money-bill-wave"></i> To'lov qabul qilish</div>
+      <button class="modal-close" onclick="closeModal('payModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div style="margin-bottom:14px;padding:14px;background:var(--bg3);border-radius:10px;font-size:14px">
+        <div style="color:var(--text2);font-size:12px;margin-bottom:4px">Mijoz</div>
+        <div style="font-weight:700" id="payCustomerName"></div>
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="input-group">
+          <label><i class="fa-solid fa-circle-exclamation"></i> Qolgan qarz</label>
+          <input type="text" id="payRemaining" readonly style="color:var(--overdue);font-weight:700">
+        </div>
+        <div class="input-group">
+          <label><i class="fa-solid fa-money-bill-wave"></i> To'lov miqdori (so'm)</label>
+          <input type="number" id="payAmount" placeholder="0" min="1">
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('payModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-primary" onclick="savePayment()"><i class="fa-solid fa-circle-check"></i> Tasdiqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CONFIRM MODAL -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-trash"></i> Qarzni o'chirish</div>
+      <button class="modal-close" onclick="closeModal('deleteModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-red" style="margin-bottom:0">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Bu qarzni o'chirmoqchimisiz? Bu amalni qaytarib bo'lmaydi!
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('deleteModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-danger" onclick="confirmDelete()"><i class="fa-solid fa-trash"></i> O'chirish</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="telegram.js"></script>
+<script src="camera.js"></script>
+<script>
+DB.checkLogin();
+const TYPE = DB.getType();
+if (!TYPE) throw new Error('no type');
+TG.startPolling();
+requestCameraAccess();
+
+document.getElementById('sidebar').innerHTML = DB.buildSidebar(TYPE, 'debts');
+
+let pendingPayDebtId = null;
+let pendingDeleteId = null;
+
+function renderDebts() {
+  const search = document.getElementById('searchInput').value.toLowerCase();
+  const filter = document.getElementById('filterStatus').value;
+  let debts = DB.getDebts(TYPE).slice().reverse();
+
+  if (search) debts = debts.filter(d => d.customerName.toLowerCase().includes(search));
+  if (filter) debts = debts.filter(d => DB.debtStatus(d) === filter);
+
+  document.getElementById('debtCount').textContent = `(${debts.length} ta)`;
+
+  const stats = DB.getStats(TYPE);
+  const alert = document.getElementById('overdueAlert');
+  if (stats.overdueCount > 0) {
+    alert.style.display = 'flex';
+    document.getElementById('overdueAlertText').innerHTML =
+      `<strong>${stats.overdueCount} ta qarz</strong> 2 oydan oshdi — qizil rang bilan belgilangan`;
+  } else {
+    alert.style.display = 'none';
+  }
+
+  const body = document.getElementById('debtsBody');
+  if (!debts.length) {
+    body.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-receipt"></i></div><p>Qarzlar topilmadi</p></div>`;
+    return;
+  }
+
+  const rows = debts.map(d => {
+    const st = DB.debtStatus(d);
+    const isPaid = st === 'paid';
+    return `<tr class="${st === 'overdue' ? 'overdue-row' : ''}">
+      <td><strong>#${d.num}</strong></td>
+      <td><strong>${d.customerName}</strong></td>
+      <td>${d.meatType ? `<span class="meat-tag"><i class="fa-solid fa-drumstick-bite"></i> ${d.meatType}</span>` : '<span style="color:var(--text2)">—</span>'}</td>
+      <td>${d.meatType ? d.kg+' kg' : '—'}</td>
+      <td>${DB.fmt(d.total)}</td>
+      <td style="color:var(--green)">${DB.fmt(d.paid)}</td>
+      <td><strong style="color:${isPaid ? 'var(--green)' : st === 'overdue' ? 'var(--overdue)' : 'var(--red-light)'}">${DB.fmt(d.remaining)}</strong></td>
+      <td>${DB.fmtDate(d.createdAt)}</td>
+      <td>${DB.statusBadge(st)}</td>
+      <td>
+        <button class="btn btn-sm btn-ghost" onclick="openPayModal('${d.id}')" ${isPaid ? 'disabled style="opacity:.4"' : ''}>
+          <i class="fa-solid fa-money-bill-wave"></i>
+        </button>
+        <button class="btn btn-sm btn-danger" onclick="openDeleteModal('${d.id}')">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </td>
+    </tr>`;
+  }).join('');
+
+  body.innerHTML = `<table>
+    <thead><tr>
+      <th>#</th><th>Mijoz</th><th>Go'sht turi</th><th>Kg</th>
+      <th>Jami</th><th>To'langan</th><th>Qolgan</th><th>Sana</th><th>Holat</th><th>Amal</th>
+    </tr></thead>
+    <tbody>${rows}</tbody>
+  </table>`;
+}
+
+function openDebtModal() {
+  const customers = DB.getCustomers(TYPE).filter(c => !c.blocked);
+  const custOpts = customers.map(c => `<option value="${c.id}" data-name="${c.name}">${c.name} — ${c.phone}</option>`).join('');
+  const isPostoyanniy = TYPE === 'postoyanniy';
+  const products = DB.getProducts(TYPE);
+
+  let body = `<div class="input-group" style="margin-bottom:14px">
+    <label><i class="fa-solid fa-user"></i> Mijoz</label>
+    <select id="debtCustomer">
+      <option value="">— mijozni tanlang —</option>${custOpts}
+    </select>
+  </div>`;
+
+  if (isPostoyanniy) {
+    body += `<div class="input-group" style="margin-bottom:14px">
+      <label><i class="fa-solid fa-money-bill-wave"></i> Qarz summasi (so'm)</label>
+      <input type="number" id="debtAmount" placeholder="100000" min="1">
+    </div>`;
+  } else {
+    const opts = products.map(p => `<option>${p.name}</option>`).join('');
+    body += `
+    <div class="input-group" style="margin-bottom:14px">
+      <label><i class="fa-solid fa-drumstick-bite"></i> Go'sht turi</label>
+      <select id="debtMeat">
+        <option value="">— tanlang —</option>${opts}
+      </select>
+    </div>
+    <div class="form-row" style="margin-bottom:14px">
+      <div class="input-group">
+        <label><i class="fa-solid fa-money-bill-wave"></i> Narxi (so'm/kg)</label>
+        <input type="number" id="debtPrice" placeholder="30000" min="1" oninput="calcDebt()">
+      </div>
+      <div class="input-group">
+        <label><i class="fa-solid fa-weight-scale"></i> Miqdor (kg)</label>
+        <input type="number" id="debtKg" placeholder="0.0" step="0.5" min="0.1" oninput="calcDebt()">
+      </div>
+    </div>
+    <div class="calc-result" id="debtCalc" style="display:none;margin-bottom:14px">
+      <span class="label"><i class="fa-solid fa-calculator"></i> Jami summa:</span>
+      <span class="amount" id="debtCalcAmt"></span>
+    </div>`;
+  }
+
+  body += `<div class="input-group">
+    <label><i class="fa-solid fa-pen-to-square"></i> Izoh (ixtiyoriy)</label>
+    <input type="text" id="debtNote" placeholder="">
+  </div>`;
+
+  document.getElementById('debtModalBody').innerHTML = body;
+  document.getElementById('debtModal').classList.add('show');
+}
+
+function calcDebt() {
+  const price = Number(document.getElementById('debtPrice')?.value);
+  const kg = Number(document.getElementById('debtKg')?.value);
+  const calc = document.getElementById('debtCalc');
+  if (price > 0 && kg > 0) {
+    calc.style.display = 'flex';
+    document.getElementById('debtCalcAmt').textContent = DB.fmt(price * kg) + " so'm";
+  } else if (calc) { calc.style.display = 'none'; }
+}
+
+function saveDebt() {
+  const custSel = document.getElementById('debtCustomer');
+  if (!custSel?.value) { alert("Mijozni tanlang!"); return; }
+  const note = document.getElementById('debtNote')?.value || '';
+  let debtData;
+
+  if (TYPE === 'postoyanniy') {
+    const amount = Number(document.getElementById('debtAmount')?.value);
+    if (!amount || amount <= 0) { alert("Summa kiriting!"); return; }
+    debtData = {
+      customerId: custSel.value,
+      customerName: custSel.options[custSel.selectedIndex].dataset.name,
+      meatType: '', pricePerKg: amount, kg: 1, note
+    };
+  } else {
+    const meatSel = document.getElementById('debtMeat');
+    const price = Number(document.getElementById('debtPrice')?.value);
+    const kg = Number(document.getElementById('debtKg')?.value);
+    if (!meatSel?.value) { alert("Go'sht turini tanlang!"); return; }
+    if (!price || price <= 0) { alert("Narxni kiriting!"); return; }
+    if (!kg || kg <= 0) { alert("Miqdorni kiriting!"); return; }
+    debtData = {
+      customerId: custSel.value,
+      customerName: custSel.options[custSel.selectedIndex].dataset.name,
+      meatType: meatSel.value,
+      pricePerKg: price, kg, note
+    };
+  }
+
+  const debt = DB.addDebt(TYPE, debtData);
+  TG.notifyDebt(DB.getTypeName(TYPE), debt.customerName, debt.meatType, debt.kg, debt.total);
+  captureDebtVideo(debt.customerName);
+  closeModal('debtModal');
+  renderDebts();
+}
+
+function openPayModal(debtId) {
+  const debt = DB.getDebts(TYPE).find(d => d.id === debtId);
+  if (!debt) return;
+  pendingPayDebtId = debtId;
+  document.getElementById('payCustomerName').textContent = debt.customerName;
+  document.getElementById('payRemaining').value = DB.fmt(debt.remaining) + " so'm";
+  document.getElementById('payAmount').value = '';
+  document.getElementById('payModal').classList.add('show');
+}
+
+function savePayment() {
+  const amount = Number(document.getElementById('payAmount').value);
+  if (!amount || amount <= 0) { alert("To'lov miqdorini kiriting!"); return; }
+  const debt = DB.getDebts(TYPE).find(d => d.id === pendingPayDebtId);
+  DB.addPayment(TYPE, pendingPayDebtId, amount);
+  if (debt) TG.notifyPayment(DB.getTypeName(TYPE), debt.customerName, amount);
+  closeModal('payModal');
+  renderDebts();
+}
+
+function openDeleteModal(id) {
+  pendingDeleteId = id;
+  document.getElementById('deleteModal').classList.add('show');
+}
+
+function confirmDelete() {
+  if (pendingDeleteId) DB.deleteDebt(TYPE, pendingDeleteId);
+  closeModal('deleteModal');
+  renderDebts();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+renderDebts();
+</script>
+</body>
+</html>

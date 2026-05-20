@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<title>Test ma'lumotlar</title>
+<style>
+  body { font-family: sans-serif; background: #141414; color: #f0f0f0; display: flex; align-items: center; justify-content: center; min-height: 100vh; flex-direction: column; gap: 16px; }
+  button { background: #c0392b; color: #fff; border: none; padding: 14px 32px; border-radius: 10px; font-size: 16px; cursor: pointer; }
+  button:hover { background: #e74c3c; }
+  #log { background: #1e1e1e; border: 1px solid #333; border-radius: 10px; padding: 16px; min-width: 400px; font-size: 13px; line-height: 1.7; white-space: pre; }
+</style>
+</head>
+<body>
+<h2>🌱 Test ma'lumotlar qo'shish</h2>
+<button onclick="seed()">▶ Qo'shish</button>
+<div id="log">Tugmani bosing...</div>
+
+<script>
+function seed() {
+  const log = document.getElementById('log');
+  const lines = [];
+  const now = Date.now();
+  const ago = d => new Date(now - d * 86400000).toISOString();
+
+  function gid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 9); }
+  function gL(k) { try { const r = localStorage.getItem(k); return r ? JSON.parse(r) : null; } catch { return null; } }
+  function sL(k, v) { localStorage.setItem(k, JSON.stringify(v)); }
+  function gC(t) { return gL('gm_' + t + '_customers') || []; }
+  function sC(t, d) { sL('gm_' + t + '_customers', d); }
+  function gD(t) { return gL('gm_' + t + '_debts') || []; }
+  function sD(t, d) { sL('gm_' + t + '_debts', d); }
+  function gN(t) { return gL('gm_' + t + '_counter') || 0; }
+  function sN(t, n) { sL('gm_' + t + '_counter', n); }
+
+  function aC(t, name, phone, note) {
+    const list = gC(t);
+    if (list.find(x => x.phone === phone)) { lines.push(`⚠️  ${name} allaqachon bor (${t})`); return list.find(x => x.phone === phone); }
+    const c = { id: gid(), name, phone, note: note || '', blocked: false, blockReason: '', blockDate: null, createdAt: new Date().toISOString() };
+    list.push(c); sC(t, list);
+    lines.push(`✅ Mijoz: ${name} (${t})`);
+    return c;
+  }
+
+  function aD(t, cid, cn, mt, price, kg, note, daysAgo) {
+    const debts = gD(t);
+    const n = gN(t) + 1; sN(t, n);
+    const total = Math.round(price * kg);
+    const status = daysAgo > 60 ? '🔴 muddati o\'tgan' : '🟡 yangi';
+    const d = {
+      id: gid(), num: n, customerId: cid, customerName: cn,
+      meatType: mt, pricePerKg: price, kg, total,
+      paid: 0, remaining: total, note: note || '',
+      status: 'unpaid', createdAt: ago(daysAgo)
+    };
+    debts.push(d); sD(t, debts);
+    lines.push(`   📄 Qarz #${n}: ${total.toLocaleString()} so'm — ${status} (${daysAgo} kun oldin)`);
+    return d;
+  }
+
+  // ── POSTOYANNIY ───────────────────────────────────────────────
+  lines.push('\n📂 POSTOYANNIY KLIENTLAR');
+  let c = aC('postoyanniy', 'Karimov Sardor', '+998901234567', 'Doimiy mijoz');
+  aD('postoyanniy', c.id, c.name, '', 150000, 1, '', 92);
+
+  c = aC('postoyanniy', 'Rahimova Malika', '+998912345678', '');
+  aD('postoyanniy', c.id, c.name, '', 200000, 1, "Tez to'lash kerak", 76);
+
+  c = aC('postoyanniy', 'Toshmatov Bobur', '+998923456789', '');
+  aD('postoyanniy', c.id, c.name, '', 80000, 1, '', 14);
+
+  c = aC('postoyanniy', 'Yusupova Dilnoza', '+998934567890', 'VIP mijoz');
+  aD('postoyanniy', c.id, c.name, '', 120000, 1, '', 4);
+
+  // ── OPTOM ─────────────────────────────────────────────────────
+  lines.push('\n📂 OPTOMIY KLIENTLAR');
+  c = aC('optom', 'Mirzayev Jasur', '+998945678901', 'Katta hajm');
+  aD('optom', c.id, c.name, "Mol go'shti", 30000, 25, '', 87);
+
+  c = aC('optom', 'Nazarova Zulfiya', '+998956789012', '');
+  aD('optom', c.id, c.name, "Qo'y go'shti", 40000, 10, "Muddati o'tgan", 66);
+
+  c = aC('optom', 'Hasanov Ulugbek', '+998967890123', '');
+  aD('optom', c.id, c.name, 'Tovuq', 15000, 15, '', 18);
+
+  c = aC('optom', 'Qodirov Sherzod', '+998978901234', '');
+  aD('optom', c.id, c.name, "Sigir go'shti", 45000, 8, '', 3);
+
+  // ── KLIENT ────────────────────────────────────────────────────
+  lines.push('\n📂 KLIENT');
+  c = aC('klient', 'Abdullayeva Feruza', '+998989012345', '');
+  aD('klient', c.id, c.name, "Mol go'shti", 30000, 5, '', 72);
+
+  c = aC('klient', 'Islamov Nodir', '+998990123456', '');
+  aD('klient', c.id, c.name, "Qo'y go'shti", 40000, 3, 'Imzo olindi', 81);
+
+  c = aC('klient', 'Xolmatova Shahlo', '+998901112233', '');
+  aD('klient', c.id, c.name, 'Tovuq', 15000, 8, '', 9);
+
+  c = aC('klient', 'Ergashev Murod', '+998912223344', 'Yangi mijoz');
+  aD('klient', c.id, c.name, "Mol go'shti", 30000, 6, '', 2);
+
+  lines.push('\n\n🎉 Tayyor! Endi sahifalarga o\'ting:');
+  lines.push('👉 <a href="dashboard.html?type=postoyanniy" style="color:#e74c3c">Postoyanniy Dashboard</a>');
+  lines.push('👉 <a href="dashboard.html?type=optom" style="color:#e74c3c">Optom Dashboard</a>');
+  lines.push('👉 <a href="customers.html?type=klient" style="color:#e74c3c">Klient Mijozlar</a>');
+  log.innerHTML = lines.join('\n');
+}
+</script>
+</body>
+</html>

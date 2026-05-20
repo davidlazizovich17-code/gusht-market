@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go'sht Market — Dashboard</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title" id="dashTitle" ondblclick="askUnlock()" title="2x bosing — statistikani ko'rish" style="cursor:pointer;user-select:none">
+        <i class="fa-solid fa-chart-bar" style="color:var(--red-light)"></i>
+        <span>Dashboard</span>
+      </div>
+      <div class="topbar-right">
+        <span class="topbar-date" id="dateDisplay"></span>
+      </div>
+    </div>
+
+    <div class="content">
+      <!-- STATS (locked) -->
+      <div class="stats-wrapper" id="statsWrapper">
+        <div class="stats-grid" style="grid-template-columns:repeat(5,1fr)">
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
+            <div class="stat-label">Jami mijozlar</div>
+            <div class="stat-value" id="s1">—</div>
+            <div class="stat-sub">ta faol</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon"><i class="fa-solid fa-money-bill-wave"></i></div>
+            <div class="stat-label">Umumiy qarz</div>
+            <div class="stat-value red" id="s2">—</div>
+            <div class="stat-sub">so'm</div>
+          </div>
+          <div class="stat-card green">
+            <div class="stat-icon"><i class="fa-solid fa-circle-check"></i></div>
+            <div class="stat-label">Bugungi to'lovlar</div>
+            <div class="stat-value green" id="s3">—</div>
+            <div class="stat-sub">so'm</div>
+          </div>
+          <div class="stat-card yellow">
+            <div class="stat-icon"><i class="fa-solid fa-receipt"></i></div>
+            <div class="stat-label">Bugungi qarzlar</div>
+            <div class="stat-value yellow" id="s4">—</div>
+            <div class="stat-sub">so'm</div>
+          </div>
+          <div class="stat-card overdue">
+            <div class="stat-icon"><i class="fa-solid fa-triangle-exclamation"></i></div>
+            <div class="stat-label">Muddati o'tgan (2+ oy)</div>
+            <div class="stat-value overdue" id="s5">—</div>
+            <div class="stat-sub">ta qarz</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- OVERDUE BOX -->
+      <div id="overdueBox"></div>
+
+      <!-- SEARCH + CUSTOMER LIST -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fa-solid fa-users" style="color:var(--red-light)"></i> Mijozlar</div>
+          <span id="custCountBadge" style="font-size:13px;color:var(--text2)"></span>
+        </div>
+        <div style="padding:14px 14px 0">
+          <div class="search-wrap">
+            <input class="search-input" id="searchInput" type="text" placeholder="Ism yoki telefon bo'yicha qidirish..." oninput="renderList()">
+          </div>
+        </div>
+        <div id="custList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- UNLOCK MODAL -->
+<div class="modal-overlay" id="unlockModal">
+  <div class="modal" style="max-width:360px">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-lock"></i> Statistikani ko'rish</div>
+      <button class="modal-close" onclick="closeModal('unlockModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="input-group">
+        <label><i class="fa-solid fa-key"></i> Parol</label>
+        <input type="password" id="unlockPass" placeholder="••••••">
+      </div>
+      <div style="color:var(--overdue);font-size:12px;margin-top:8px;display:none" id="unlockErr">
+        <i class="fa-solid fa-triangle-exclamation"></i> Parol noto'g'ri!
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('unlockModal')">Bekor</button>
+      <button class="btn btn-primary" onclick="doUnlock()"><i class="fa-solid fa-unlock"></i> Ochish</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD DEBT MODAL -->
+<div class="modal-overlay" id="debtModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-receipt"></i> Qarz yozish</div>
+      <button class="modal-close" onclick="closeModal('debtModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="debtModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('debtModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-primary" onclick="saveDebt()"><i class="fa-solid fa-floppy-disk"></i> Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- REMOVE DEBT MODAL -->
+<div class="modal-overlay" id="removeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-trash"></i> Qarzni o'chirish</div>
+      <button class="modal-close" onclick="closeModal('removeModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="removeModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('removeModal')">Yopish</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="telegram.js"></script>
+<script src="camera.js"></script>
+<script>
+DB.checkLogin();
+const TYPE = DB.getType();
+if (!TYPE) throw new Error('no type');
+TG.startPolling();
+requestCameraAccess();
+
+document.getElementById('sidebar').innerHTML = DB.buildSidebar(TYPE, 'dashboard');
+document.getElementById('dateDisplay').textContent = new Date().toLocaleDateString('uz-UZ', {year:'numeric',month:'long',day:'numeric'});
+
+// ─── Stats lock ───────────────────────────────────────────────────────────
+const STATS_KEY = 'gm_stats_unlocked';
+if (sessionStorage.getItem(STATS_KEY)) unlockStatsUI();
+
+function askUnlock() {
+  if (sessionStorage.getItem(STATS_KEY)) {
+    // Allaqachon ochiq — yopib qo'y
+    sessionStorage.removeItem(STATS_KEY);
+    document.getElementById('statsWrapper').classList.remove('unlocked');
+    return;
+  }
+  document.getElementById('unlockPass').value = '';
+  document.getElementById('unlockErr').style.display = 'none';
+  document.getElementById('unlockModal').classList.add('show');
+  setTimeout(() => document.getElementById('unlockPass').focus(), 100);
+}
+
+document.getElementById('unlockPass').addEventListener('keydown', e => { if (e.key === 'Enter') doUnlock(); });
+
+function doUnlock() {
+  const pass = document.getElementById('unlockPass').value;
+  if (pass === '12345') {
+    sessionStorage.setItem(STATS_KEY, '1');
+    closeModal('unlockModal');
+    unlockStatsUI();
+    loadStats();
+  } else {
+    document.getElementById('unlockErr').style.display = 'block';
+    document.getElementById('unlockPass').value = '';
+    document.getElementById('unlockPass').focus();
+  }
+}
+
+function unlockStatsUI() {
+  document.getElementById('statsWrapper').classList.add('unlocked');
+}
+
+function loadStats() {
+  if (!sessionStorage.getItem(STATS_KEY)) return;
+  const stats = DB.getStats(TYPE);
+  const today = new Date().toDateString();
+  const todayDebtTotal = DB.getDebts(TYPE)
+    .filter(d => new Date(d.createdAt).toDateString() === today)
+    .reduce((s, d) => s + d.total, 0);
+  document.getElementById('s1').textContent = stats.totalCustomers;
+  document.getElementById('s2').textContent = DB.fmt(stats.totalDebt);
+  document.getElementById('s3').textContent = DB.fmt(stats.todayPaymentTotal);
+  document.getElementById('s4').textContent = DB.fmt(todayDebtTotal);
+  document.getElementById('s5').textContent = stats.overdueCount;
+}
+
+// ─── Customer list ────────────────────────────────────────────────────────
+let _debtCustId = '', _debtCustName = '';
+
+function renderList() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  let customers = DB.getCustomers(TYPE).filter(c => !c.blocked);
+  if (q) customers = customers.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
+
+  document.getElementById('custCountBadge').textContent = `(${customers.length} ta mijoz)`;
+
+  const list = document.getElementById('custList');
+  if (!customers.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-users"></i></div><p>${q ? 'Mijoz topilmadi' : 'Hali mijoz qo\'shilmagan'}</p></div>`;
+    return;
+  }
+
+  list.innerHTML = `<div class="cust-list">${customers.map(c => buildCustCard(c)).join('')}</div>`;
+  renderOverdueBox();
+}
+
+function renderOverdueBox() {
+  const all = DB.getCustomers(TYPE).filter(c => !c.blocked);
+  const overdue = all.filter(c =>
+    DB.getDebts(TYPE).some(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue')
+  ).map(c => ({
+    id: c.id, name: c.name, phone: c.phone,
+    debt: DB.getCustomerDebt(TYPE, c.id),
+    note: DB.getDebts(TYPE).filter(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue').map(d => d.note).filter(Boolean).join('; ')
+  }));
+
+  const box = document.getElementById('overdueBox');
+  if (!overdue.length) { box.innerHTML = ''; return; }
+
+  const rows = overdue.map(c => `
+    <tr>
+      <td><strong>${c.name}</strong></td>
+      <td style="color:var(--text2)">${c.phone}</td>
+      <td style="color:var(--overdue);font-weight:700">${DB.fmt(c.debt)} so'm</td>
+      <td>${c.note ? `<span style="color:var(--text2);font-size:12px">${c.note}</span>` : '—'}</td>
+      <td>
+        <button class="btn btn-sm btn-ghost" style="border:1px solid var(--overdue);color:var(--overdue)" onclick="printOneCustomer('${c.id}')">
+          <i class="fa-solid fa-print"></i> Chop etish
+        </button>
+      </td>
+    </tr>`).join('');
+
+  box.innerHTML = `<div class="card" style="border:1.5px solid var(--overdue);margin-bottom:20px">
+    <div class="card-header" style="border-bottom:1px solid var(--overdue)">
+      <div class="card-title" style="color:var(--overdue)">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        2+ oy muddati o'tgan &nbsp;<span style="font-weight:400;font-size:13px">(${overdue.length} ta)</span>
+      </div>
+      <button class="btn btn-sm btn-danger" onclick="printAllOverdue()">
+        <i class="fa-solid fa-print"></i> Hammasini chop etish
+      </button>
+    </div>
+    <div class="card-body">
+      <table>
+        <thead><tr><th>Ism familiya</th><th>Telefon</th><th>Qarz summasi</th><th>Izoh</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ─── PDF chop etish (dashboard) ───────────────────────────────────────────
+async function generateAndSendPDF(list) {
+  if (!window.jspdf) { alert('PDF kutubxonasi yuklanmagan!'); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const dateStr = new Date().toLocaleDateString('uz-UZ');
+  const typeName = DB.getTypeName(TYPE);
+
+  doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+  doc.text("Muddati o'tgan qarzlar ro'yxati", 105, 16, { align: 'center' });
+  doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+  doc.text(`Tizim: ${typeName}`, 14, 24);
+  doc.text(`Sana: ${dateStr}`, 14, 30);
+  doc.text(`Jami: ${list.length} ta mijoz`, 14, 36);
+
+  const body = list.flatMap((c, i) => [
+    [String(i + 1), c.name, c.phone || '', Number(c.debt).toLocaleString('uz-UZ') + " so'm", c.note || '', ''],
+    ['', '', '', '', '', '']
+  ]);
+
+  doc.autoTable({
+    startY: 42,
+    head: [['#', 'Ism familiya', 'Telefon', 'Summa', 'Izoh', 'Imzo']],
+    body,
+    styles: { fontSize: 9, cellPadding: 3, lineColor: [200, 200, 200], lineWidth: 0.3 },
+    headStyles: { fillColor: [192, 57, 43], textColor: 255, fontStyle: 'bold' },
+    columnStyles: {
+      0: { cellWidth: 10, halign: 'center' },
+      1: { cellWidth: 48 },
+      2: { cellWidth: 32 },
+      3: { cellWidth: 36, halign: 'right' },
+      4: { cellWidth: 32 },
+      5: { cellWidth: 28 }
+    }
+  });
+
+  const finalY = doc.lastAutoTable.finalY + 8;
+  const total = list.reduce((s, c) => s + c.debt, 0);
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(11);
+  doc.text(`Jami qarz: ${Number(total).toLocaleString('uz-UZ')} so'm`, 14, finalY);
+
+  const blob = doc.output('blob');
+  const fname = `qarzdorlar_${TYPE}_${new Date().toISOString().split('T')[0]}.pdf`;
+  const caption = `📋 ${typeName}\n🔴 Muddati o'tgan: ${list.length} ta\n💰 Jami: ${Number(total).toLocaleString('uz-UZ')} so'm\n📅 ${dateStr}`;
+  const result = await TG.sendDocument(blob, fname, caption);
+  if (result && result.ok) {
+    alert('✅ PDF Telegramga yuborildi!');
+  } else {
+    alert('❌ Xato: ' + (result?.description || 'Bot xatosi'));
+  }
+}
+
+function printOneCustomer(custId) {
+  const c = DB.getCustomers(TYPE).find(x => x.id === custId);
+  if (!c) return;
+  const debt = DB.getCustomerDebt(TYPE, c.id);
+  const debts = DB.getDebts(TYPE).filter(d => d.customerId === custId && DB.debtStatus(d) === 'overdue');
+  const note = debts.map(d => d.note).filter(Boolean).join('; ');
+  generateAndSendPDF([{ name: c.name, phone: c.phone, debt, note }]);
+}
+
+function printAllOverdue() {
+  const all = DB.getCustomers(TYPE).filter(c => !c.blocked);
+  const list = all.filter(c =>
+    DB.getDebts(TYPE).some(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue')
+  ).map(c => {
+    const debt = DB.getCustomerDebt(TYPE, c.id);
+    const debts = DB.getDebts(TYPE).filter(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue');
+    const note = debts.map(d => d.note).filter(Boolean).join('; ');
+    return { name: c.name, phone: c.phone, debt, note };
+  });
+  if (!list.length) { alert("Muddati o'tgan qarzlar yo'q!"); return; }
+  generateAndSendPDF(list);
+}
+
+function buildCustCard(c) {
+  const debt = DB.getCustomerDebt(TYPE, c.id);
+  const activeDebts = DB.getDebts(TYPE).filter(d => d.customerId === c.id && d.status !== 'paid');
+  const hasOverdue = activeDebts.some(d => DB.isOverdue(d.createdAt));
+  let cardClass = debt > 0 ? (hasOverdue ? 'has-overdue' : 'has-debt') : '';
+
+  const debtRows = activeDebts.length ? activeDebts.map(d => `
+    <div class="cust-debt-row">
+      <div>
+        <span style="color:var(--text2);font-size:12px">#${d.num} • ${DB.fmtDate(d.createdAt)}</span>
+        ${d.meatType ? `<span class="meat-tag" style="margin-left:6px;font-size:11px"><i class="fa-solid fa-drumstick-bite"></i> ${d.meatType} ${d.kg}kg</span>` : ''}
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700;color:${DB.isOverdue(d.createdAt)?'var(--overdue)':'var(--red-light)'}">
+          ${DB.fmt(d.remaining)} so'm
+        </div>
+        ${DB.statusBadge(DB.debtStatus(d))}
+      </div>
+    </div>`).join('') :
+    `<div style="padding:10px;text-align:center;color:var(--green);font-size:13px"><i class="fa-solid fa-check"></i> Qarz yo'q</div>`;
+
+  return `
+    <div class="cust-card ${cardClass}" id="card-${c.id}">
+      <div class="cust-header" onclick="toggleCard('${c.id}')">
+        <div class="cust-info">
+          <div class="cust-name">${c.name}</div>
+          <div class="cust-phone"><i class="fa-solid fa-phone" style="font-size:10px;margin-right:3px"></i>${c.phone}</div>
+          ${c.note ? `<div class="cust-note"><i class="fa-solid fa-pen-to-square" style="font-size:10px"></i> ${c.note}</div>` : ''}
+        </div>
+        <div class="cust-debt-sum ${debt === 0 ? 'zero' : ''}">${DB.fmt(debt)} so'm</div>
+        <div class="cust-btns" onclick="event.stopPropagation()">
+          <button class="btn-plus" title="Qarz yozish" onclick="openDebtModal('${c.id}')">+</button>
+          <button class="btn-minus" title="Qarz o'chirish" onclick="openRemoveModal('${c.id}')">−</button>
+        </div>
+        <i class="fa-solid fa-chevron-down cust-caret" id="caret-${c.id}"></i>
+      </div>
+      <div class="cust-body" id="body-${c.id}">
+        <div class="cust-body-inner">${debtRows}</div>
+      </div>
+    </div>`;
+}
+
+function toggleCard(id) {
+  const body = document.getElementById('body-' + id);
+  const caret = document.getElementById('caret-' + id);
+  body.classList.toggle('open');
+  caret.classList.toggle('open');
+}
+
+// ─── Add Debt ─────────────────────────────────────────────────────────────
+function openDebtModal(custId) {
+  const c = DB.getCustomers(TYPE).find(x => x.id === custId);
+  if (!c) return;
+  _debtCustId = custId;
+  _debtCustName = c.name;
+
+  const isPostoyanniy = TYPE === 'postoyanniy';
+  const products = DB.getProducts(TYPE);
+
+  let body = `<div style="background:var(--bg3);padding:12px 14px;border-radius:10px;margin-bottom:16px;font-size:14px">
+    <span style="color:var(--text2);font-size:12px">Mijoz:</span>
+    <strong style="margin-left:6px">${c.name}</strong>
+  </div>`;
+
+  if (isPostoyanniy) {
+    body += `
+      <div class="input-group" style="margin-bottom:14px">
+        <label><i class="fa-solid fa-money-bill-wave"></i> Qarz summasi (so'm)</label>
+        <input type="number" id="debtAmount" placeholder="100000" min="1">
+      </div>`;
+  } else {
+    const opts = products.map(p => `<option data-name="${p.name}">${p.name}</option>`).join('');
+    body += `
+      <div class="input-group" style="margin-bottom:14px">
+        <label><i class="fa-solid fa-drumstick-bite"></i> Go'sht turi</label>
+        <select id="debtMeat">
+          <option value="">— tanlang —</option>${opts}
+        </select>
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="input-group">
+          <label><i class="fa-solid fa-money-bill-wave"></i> Narxi (so'm/kg)</label>
+          <input type="number" id="debtPrice" placeholder="30000" min="1" oninput="calcDebt()">
+        </div>
+        <div class="input-group">
+          <label><i class="fa-solid fa-weight-scale"></i> Miqdor (kg)</label>
+          <input type="number" id="debtKg" placeholder="0.0" step="0.5" min="0.1" oninput="calcDebt()">
+        </div>
+      </div>
+      <div class="calc-result" id="debtCalc" style="display:none;margin-bottom:14px">
+        <span class="label"><i class="fa-solid fa-calculator"></i> Jami summa:</span>
+        <span class="amount" id="debtCalcAmt"></span>
+      </div>`;
+  }
+
+  body += `<div class="input-group">
+    <label><i class="fa-solid fa-pen-to-square"></i> Izoh (ixtiyoriy)</label>
+    <input type="text" id="debtNote" placeholder="">
+  </div>`;
+
+  document.getElementById('debtModalBody').innerHTML = body;
+  document.getElementById('debtModal').classList.add('show');
+}
+
+function calcDebt() {
+  const price = Number(document.getElementById('debtPrice')?.value);
+  const kg = Number(document.getElementById('debtKg')?.value);
+  const calc = document.getElementById('debtCalc');
+  if (price > 0 && kg > 0) {
+    calc.style.display = 'flex';
+    document.getElementById('debtCalcAmt').textContent = DB.fmt(price * kg) + " so'm";
+  } else if (calc) {
+    calc.style.display = 'none';
+  }
+}
+
+function saveDebt() {
+  const note = document.getElementById('debtNote')?.value || '';
+  let debtData;
+
+  if (TYPE === 'postoyanniy') {
+    const amount = Number(document.getElementById('debtAmount')?.value);
+    if (!amount || amount <= 0) { alert("Summa kiriting!"); return; }
+    debtData = { customerId: _debtCustId, customerName: _debtCustName, meatType: '', pricePerKg: amount, kg: 1, note };
+  } else {
+    const meatSel = document.getElementById('debtMeat');
+    const price = Number(document.getElementById('debtPrice')?.value);
+    const kg = Number(document.getElementById('debtKg')?.value);
+    if (!meatSel?.value) { alert("Go'sht turini tanlang!"); return; }
+    if (!price || price <= 0) { alert("Narxni kiriting!"); return; }
+    if (!kg || kg <= 0) { alert("Miqdorni kiriting!"); return; }
+    debtData = {
+      customerId: _debtCustId, customerName: _debtCustName,
+      meatType: meatSel.value,
+      pricePerKg: price, kg, note
+    };
+  }
+
+  const debt = DB.addDebt(TYPE, debtData);
+  TG.notifyDebt(DB.getTypeName(TYPE), debt.customerName, debt.meatType, debt.kg, debt.total);
+  captureDebtVideo(debt.customerName);
+  closeModal('debtModal');
+  renderList();
+  loadStats();
+}
+
+// ─── Remove Debt ──────────────────────────────────────────────────────────
+function openRemoveModal(custId) {
+  const c = DB.getCustomers(TYPE).find(x => x.id === custId);
+  const custName = c ? c.name : '';
+  const debts = DB.getDebts(TYPE).filter(d => d.customerId === custId && d.status !== 'paid');
+  let body = `<p style="margin-bottom:14px;color:var(--text2);font-size:13px">
+    <strong style="color:var(--text)">${custName}</strong> — faol qarzlar:
+  </p>`;
+  if (!debts.length) {
+    body += `<div style="text-align:center;color:var(--green);padding:20px"><i class="fa-solid fa-check"></i> Faol qarz yo'q</div>`;
+  } else {
+    body += debts.map(d => `
+      <div class="cust-debt-row" style="margin-bottom:8px">
+        <div>
+          <div style="font-weight:600">#${d.num} — ${DB.fmt(d.remaining)} so'm</div>
+          <div style="font-size:12px;color:var(--text2)">${DB.fmtDate(d.createdAt)}${d.meatType?' • '+d.meatType+' '+d.kg+'kg':''}</div>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="deleteDebt('${d.id}')">
+          <i class="fa-solid fa-trash"></i> O'chirish
+        </button>
+      </div>`).join('');
+  }
+  document.getElementById('removeModalBody').innerHTML = body;
+  document.getElementById('removeModal').classList.add('show');
+}
+
+function deleteDebt(debtId) {
+  if (!confirm("Bu qarzni o'chirmoqchimisiz?")) return;
+  DB.deleteDebt(TYPE, debtId);
+  closeModal('removeModal');
+  renderList();
+  loadStats();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+// ─── Init ─────────────────────────────────────────────────────────────────
+loadStats();
+renderList();
+</script>
+</body>
+</html>

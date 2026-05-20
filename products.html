@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go'sht Market — Go'sht turlari</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title"><i class="fa-solid fa-drumstick-bite" style="color:var(--red-light)"></i> Go'sht turlari va narxlar</div>
+      <div class="topbar-right">
+        <button class="btn btn-primary btn-sm" onclick="openAddModal()">
+          <i class="fa-solid fa-plus"></i> Tur qo'shish
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="productGrid" class="product-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-plus"></i> Yangi go'sht turi</div>
+      <button class="modal-close" onclick="closeModal('addModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="input-group" style="margin-bottom:14px">
+        <label><i class="fa-solid fa-tag"></i> Go'sht nomi</label>
+        <input type="text" id="addName" placeholder="Masalan: Ot go'shti">
+      </div>
+      <div class="input-group">
+        <label><i class="fa-solid fa-icons"></i> Ikonka</label>
+        <select id="addIcon">
+          <option value="fa-cow">🐄 Mol / Sigir</option>
+          <option value="fa-horse">🐎 Qo'y / Ot</option>
+          <option value="fa-feather">🐔 Tovuq / Parrandа</option>
+          <option value="fa-bone">🦴 Qovurg'a / Suyak</option>
+          <option value="fa-heart-pulse">❤️ Ichak-chavaq</option>
+          <option value="fa-drumstick-bite">🥩 Umumiy go'sht</option>
+          <option value="fa-fish">🐟 Baliq</option>
+        </select>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-primary" onclick="saveProduct()"><i class="fa-solid fa-floppy-disk"></i> Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-pen-to-square"></i> Go'sht turini tahrirlash</div>
+      <button class="modal-close" onclick="closeModal('editModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+      <div class="input-group">
+        <label><i class="fa-solid fa-tag"></i> Go'sht nomi</label>
+        <input type="text" id="editName">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-primary" onclick="saveEdit()"><i class="fa-solid fa-floppy-disk"></i> Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE MODAL -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-trash"></i> Go'sht turini o'chirish</div>
+      <button class="modal-close" onclick="closeModal('deleteModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-red" style="margin-bottom:0">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Bu go'sht turini o'chirmoqchimisiz?
+      </div>
+      <input type="hidden" id="deleteId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('deleteModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-danger" onclick="confirmDelete()"><i class="fa-solid fa-trash"></i> O'chirish</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="telegram.js"></script>
+<script>
+DB.checkLogin();
+const TYPE = DB.getType();
+if (!TYPE) throw new Error('no type');
+TG.startPolling();
+
+document.getElementById('sidebar').innerHTML = DB.buildSidebar(TYPE, 'products');
+
+function renderProducts() {
+  const products = DB.getProducts(TYPE);
+
+  const grid = document.getElementById('productGrid');
+  if (!products.length) {
+    grid.innerHTML = `<div class="empty-state" style="grid-column:1/-1"><div class="empty-icon"><i class="fa-solid fa-drumstick-bite"></i></div><p>Hali go'sht turi qo'shilmagan</p></div>`;
+    return;
+  }
+
+  grid.innerHTML = products.map(p => `
+    <div class="product-card">
+      <div class="product-icon-wrap"><i class="fa-solid ${p.icon}"></i></div>
+      <div class="product-name">${p.name}</div>
+      <div class="product-actions">
+        <button class="btn btn-ghost btn-sm" onclick="openEditModal('${p.id}')">
+          <i class="fa-solid fa-pen-to-square"></i> Tahrirlash
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="openDeleteModal('${p.id}')">
+          <i class="fa-solid fa-trash"></i>
+        </button>
+      </div>
+    </div>`).join('');
+}
+
+function openAddModal() {
+  document.getElementById('addName').value = '';
+  document.getElementById('addModal').classList.add('show');
+  setTimeout(() => document.getElementById('addName').focus(), 100);
+}
+
+function saveProduct() {
+  const name = document.getElementById('addName').value.trim();
+  const icon = document.getElementById('addIcon').value;
+  if (!name) { alert("Nom kiriting!"); return; }
+  DB.addProduct(TYPE, name, 0, icon);
+  closeModal('addModal');
+  renderProducts();
+}
+
+function openEditModal(id) {
+  const p = DB.getProducts(TYPE).find(x => x.id === id);
+  if (!p) return;
+  document.getElementById('editId').value = id;
+  document.getElementById('editName').value = p.name;
+  document.getElementById('editModal').classList.add('show');
+}
+
+function saveEdit() {
+  const id = document.getElementById('editId').value;
+  const name = document.getElementById('editName').value.trim();
+  if (!name) { alert("Nom kiriting!"); return; }
+  DB.updateProduct(TYPE, id, name, 0);
+  closeModal('editModal');
+  renderProducts();
+}
+
+function openDeleteModal(id) {
+  document.getElementById('deleteId').value = id;
+  document.getElementById('deleteModal').classList.add('show');
+}
+
+function confirmDelete() {
+  DB.deleteProduct(TYPE, document.getElementById('deleteId').value);
+  closeModal('deleteModal');
+  renderProducts();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+renderProducts();
+</script>
+</body>
+</html>

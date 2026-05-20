@@ -1,0 +1,592 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go'sht Market — Mijozlar</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+<div class="layout">
+  <aside class="sidebar" id="sidebar"></aside>
+
+  <div class="main">
+    <div class="topbar">
+      <div class="topbar-title"><i class="fa-solid fa-users" style="color:var(--red-light)"></i> Mijozlar</div>
+      <div class="topbar-right">
+        <button class="btn btn-primary btn-sm" onclick="openAddModal()">
+          <i class="fa-solid fa-user-plus"></i> Mijoz qo'shish
+        </button>
+      </div>
+    </div>
+
+    <div class="content">
+      <div id="overdueBox"></div>
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title"><i class="fa-solid fa-users" style="color:var(--red-light)"></i> Barcha mijozlar <span id="custCount" style="color:var(--text2);font-weight:400;font-size:13px"></span></div>
+          <div style="display:flex;gap:8px" id="statBadges"></div>
+        </div>
+        <div style="padding:14px 14px 0">
+          <div class="search-wrap">
+            <input class="search-input" type="text" id="searchInput" placeholder="Ism yoki telefon bo'yicha qidirish..." oninput="renderList()">
+            <select id="filterStatus" onchange="renderList()" style="background:var(--bg2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;color:var(--text);font-size:14px;outline:none;min-width:150px">
+              <option value="">Barchasi</option>
+              <option value="active">Faol</option>
+              <option value="blocked">Bloklangan</option>
+            </select>
+          </div>
+        </div>
+        <div id="custList"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ADD MODAL -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-user-plus"></i> Yangi mijoz qo'shish</div>
+      <button class="modal-close" onclick="closeModal('addModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="input-group" style="margin-bottom:14px">
+        <label><i class="fa-solid fa-user"></i> Ism familiya</label>
+        <input type="text" id="addName" placeholder="Karimov Sardor">
+      </div>
+      <div class="input-group" style="margin-bottom:14px">
+        <label><i class="fa-solid fa-phone"></i> Telefon raqam</label>
+        <input type="text" id="addPhone" placeholder="+998 90 123 45 67">
+      </div>
+      <div class="input-group">
+        <label><i class="fa-solid fa-pen-to-square"></i> Izoh (ixtiyoriy)</label>
+        <input type="text" id="addNote" placeholder="">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('addModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-primary" onclick="saveCustomer()"><i class="fa-solid fa-floppy-disk"></i> Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- EDIT MODAL -->
+<div class="modal-overlay" id="editModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-pen-to-square"></i> Mijozni tahrirlash</div>
+      <button class="modal-close" onclick="closeModal('editModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="editId">
+      <div class="input-group" style="margin-bottom:14px">
+        <label><i class="fa-solid fa-user"></i> Ism familiya</label>
+        <input type="text" id="editName">
+      </div>
+      <div class="input-group" style="margin-bottom:14px">
+        <label><i class="fa-solid fa-phone"></i> Telefon raqam</label>
+        <input type="text" id="editPhone">
+      </div>
+      <div class="input-group">
+        <label><i class="fa-solid fa-pen-to-square"></i> Izoh</label>
+        <input type="text" id="editNote" placeholder="">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('editModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-primary" onclick="saveEdit()"><i class="fa-solid fa-floppy-disk"></i> Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- BLOCK MODAL -->
+<div class="modal-overlay" id="blockModal">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-ban"></i> Mijozni bloklash</div>
+      <button class="modal-close" onclick="closeModal('blockModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-red" style="margin-bottom:14px">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Bloklangan mijozga yangi qarz yozib bo'lmaydi!
+      </div>
+      <div class="input-group">
+        <label><i class="fa-solid fa-pen-to-square"></i> Bloklash sababi</label>
+        <input type="text" id="blockReason" placeholder="Masalan: Qarzni qaytarmayapti">
+      </div>
+      <input type="hidden" id="blockId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('blockModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-danger" onclick="confirmBlock()"><i class="fa-solid fa-ban"></i> Bloklash</button>
+    </div>
+  </div>
+</div>
+
+<!-- ADD DEBT MODAL -->
+<div class="modal-overlay" id="debtModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-receipt"></i> Qarz yozish</div>
+      <button class="modal-close" onclick="closeModal('debtModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="debtModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('debtModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-primary" onclick="saveDebt()"><i class="fa-solid fa-floppy-disk"></i> Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- REMOVE DEBT MODAL -->
+<div class="modal-overlay" id="removeModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-trash"></i> Qarzni o'chirish</div>
+      <button class="modal-close" onclick="closeModal('removeModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="removeModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('removeModal')">Yopish</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="telegram.js"></script>
+<script src="camera.js"></script>
+<script>
+DB.checkLogin();
+const TYPE = DB.getType();
+if (!TYPE) throw new Error('no type');
+TG.startPolling();
+requestCameraAccess();
+
+document.getElementById('sidebar').innerHTML = DB.buildSidebar(TYPE, 'customers');
+
+let _debtCustId = '', _debtCustName = '';
+
+// ─── Overdue Box ──────────────────────────────────────────────────────────
+function renderOverdueBox() {
+  const all = DB.getCustomers(TYPE).filter(c => !c.blocked);
+  const overdue = all.filter(c =>
+    DB.getDebts(TYPE).some(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue')
+  ).map(c => ({
+    id: c.id,
+    name: c.name,
+    phone: c.phone,
+    debt: DB.getCustomerDebt(TYPE, c.id),
+    note: DB.getDebts(TYPE).filter(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue').map(d => d.note).filter(Boolean).join('; ')
+  }));
+
+  const box = document.getElementById('overdueBox');
+  if (!overdue.length) { box.innerHTML = ''; return; }
+
+  const printAllBtn = `<button class="btn btn-sm btn-danger" onclick="printAllOverdue()"><i class="fa-solid fa-print"></i> Hammasini chop etish</button>`;
+
+  const rows = overdue.map((c, i) => {
+    const printBtn = `<button class="btn btn-sm btn-ghost" style="border:1px solid var(--overdue);color:var(--overdue)" onclick="printOneCustomer('${c.id}')"><i class="fa-solid fa-print"></i></button>`;
+    return `<tr>
+      <td><strong style="color:var(--text)">${c.name}</strong></td>
+      <td style="color:var(--text2)">${c.phone}</td>
+      <td style="color:var(--overdue);font-weight:700">${DB.fmt(c.debt)} so'm</td>
+      <td>${c.note ? `<span style="color:var(--text2);font-size:12px">${c.note}</span>` : '—'}</td>
+      <td>${printBtn}</td>
+    </tr>`;
+  }).join('');
+
+  box.innerHTML = `<div class="card" style="border:1.5px solid var(--overdue);margin-bottom:20px">
+    <div class="card-header" style="border-bottom:1px solid var(--overdue)">
+      <div class="card-title" style="color:var(--overdue)">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        2+ oy muddati o'tgan qarzdorlar &nbsp;<span style="font-weight:400;font-size:13px">(${overdue.length} ta)</span>
+      </div>
+      ${printAllBtn}
+    </div>
+    <div class="card-body">
+      <table>
+        <thead><tr><th>Ism familiya</th><th>Telefon</th><th>Qarz summasi</th><th>Izoh</th><th></th></tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+  </div>`;
+}
+
+// ─── PDF chop etish ────────────────────────────────────────────────────────
+async function generateAndSendPDF(list) {
+  if (!window.jspdf) { alert("PDF kutubxonasi yuklanmagan!"); return; }
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+  const dateStr = new Date().toLocaleDateString('uz-UZ');
+  const typeName = DB.getTypeName(TYPE);
+
+  doc.setFontSize(13); doc.setFont('helvetica','bold');
+  doc.text("Muddati o'tgan qarzlar ro'yxati", 105, 16, { align:'center' });
+  doc.setFontSize(10); doc.setFont('helvetica','normal');
+  doc.text(`Tizim: ${typeName}`, 14, 24);
+  doc.text(`Sana: ${dateStr}`, 14, 30);
+  doc.text(`Jami: ${list.length} ta mijoz`, 14, 36);
+
+  const body = list.flatMap((c, i) => [
+    [String(i+1), c.name, c.phone||'', Number(c.debt).toLocaleString('uz-UZ')+" so'm", c.note||'', ''],
+    ['','','','','','']  // imzo uchun bo'sh qator
+  ]);
+
+  doc.autoTable({
+    startY: 42,
+    head: [['#','Ism familiya','Telefon','Summa','Izoh','Imzo']],
+    body,
+    styles: { fontSize:9, cellPadding:3, lineColor:[200,200,200], lineWidth:0.3 },
+    headStyles: { fillColor:[192,57,43], textColor:255, fontStyle:'bold' },
+    columnStyles: {
+      0:{ cellWidth:10, halign:'center' },
+      1:{ cellWidth:48 },
+      2:{ cellWidth:32 },
+      3:{ cellWidth:36, halign:'right' },
+      4:{ cellWidth:32 },
+      5:{ cellWidth:28 }
+    },
+    didDrawCell(data) {
+      // Bo'sh (imzo) qatorlarni balandroq qilish uchun belgi
+    }
+  });
+
+  const finalY = doc.lastAutoTable.finalY + 8;
+  const total = list.reduce((s,c)=>s+c.debt,0);
+  doc.setFont('helvetica','bold'); doc.setFontSize(11);
+  doc.text(`Jami qarz: ${Number(total).toLocaleString('uz-UZ')} so'm`, 14, finalY);
+
+  const blob = doc.output('blob');
+  const fname = `qarzdorlar_${TYPE}_${new Date().toISOString().split('T')[0]}.pdf`;
+  const caption = `📋 ${typeName}\n🔴 Muddati o'tgan: ${list.length} ta mijoz\n💰 Jami: ${Number(total).toLocaleString('uz-UZ')} so'm\n📅 ${dateStr}`;
+  const result = await TG.sendDocument(blob, fname, caption);
+  if (result && result.ok) {
+    alert('✅ PDF Telegramga yuborildi!');
+  } else {
+    alert('❌ Xato: ' + (result?.description || 'Internet yoki bot xatosi'));
+  }
+}
+
+function printOneCustomer(custId) {
+  const c = DB.getCustomers(TYPE).find(x => x.id === custId);
+  if (!c) return;
+  const debt = DB.getCustomerDebt(TYPE, c.id);
+  const debts = DB.getDebts(TYPE).filter(d => d.customerId === custId && DB.debtStatus(d) === 'overdue');
+  const note = debts.map(d=>d.note).filter(Boolean).join('; ');
+  generateAndSendPDF([{ name:c.name, phone:c.phone, debt, note }]);
+}
+
+function printAllOverdue() {
+  const all = DB.getCustomers(TYPE).filter(c => !c.blocked);
+  const list = all.filter(c =>
+    DB.getDebts(TYPE).some(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue')
+  ).map(c => {
+    const debt = DB.getCustomerDebt(TYPE, c.id);
+    const debts = DB.getDebts(TYPE).filter(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue');
+    const note = debts.map(d=>d.note).filter(Boolean).join('; ');
+    return { name:c.name, phone:c.phone, debt, note };
+  });
+  if (!list.length) { alert("Muddati o'tgan qarzlar yo'q!"); return; }
+  generateAndSendPDF(list);
+}
+
+// ─── Render List ──────────────────────────────────────────────────────────
+function renderList() {
+  const q = document.getElementById('searchInput').value.toLowerCase();
+  const filter = document.getElementById('filterStatus').value;
+  let customers = DB.getCustomers(TYPE);
+
+  if (q) customers = customers.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
+  if (filter === 'active') customers = customers.filter(c => !c.blocked);
+  if (filter === 'blocked') customers = customers.filter(c => c.blocked);
+
+  const all = DB.getCustomers(TYPE);
+  const blocked = all.filter(c => c.blocked).length;
+  const debtors = all.filter(c => !c.blocked && DB.getCustomerDebt(TYPE, c.id) > 0).length;
+
+  document.getElementById('custCount').textContent = `(${customers.length} ta)`;
+  document.getElementById('statBadges').innerHTML = `
+    <span class="badge badge-red"><i class="fa-solid fa-triangle-exclamation"></i> ${debtors} qarzdor</span>
+    <span class="badge badge-black"><i class="fa-solid fa-ban"></i> ${blocked} bloklangan</span>`;
+
+  const list = document.getElementById('custList');
+  if (!customers.length) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon"><i class="fa-solid fa-users"></i></div><p>Mijozlar topilmadi</p></div>`;
+    return;
+  }
+
+  list.innerHTML = `<div class="cust-list">${customers.map(c => buildCustCard(c)).join('')}</div>`;
+  renderOverdueBox();
+}
+
+function buildCustCard(c) {
+  const debt = DB.getCustomerDebt(TYPE, c.id);
+  const activeDebts = DB.getDebts(TYPE).filter(d => d.customerId === c.id && d.status !== 'paid');
+  const hasOverdue = activeDebts.some(d => DB.isOverdue(d.createdAt));
+
+  let cardClass = '';
+  if (c.blocked) cardClass = '';
+  else if (hasOverdue) cardClass = 'has-overdue';
+  else if (debt > 0) cardClass = 'has-debt';
+
+  const debtRows = activeDebts.length ? activeDebts.map(d => `
+    <div class="cust-debt-row">
+      <div>
+        <span style="color:var(--text2);font-size:12px">#${d.num} • ${DB.fmtDate(d.createdAt)}</span>
+        ${d.meatType ? `<span class="meat-tag" style="margin-left:6px;font-size:11px"><i class="fa-solid fa-drumstick-bite"></i> ${d.meatType} ${d.kg}kg</span>` : ''}
+      </div>
+      <div style="text-align:right">
+        <div style="font-weight:700;color:${DB.debtStatus(d)==='overdue'?'var(--overdue)':'var(--red-light)'}">
+          ${DB.fmt(d.remaining)} so'm
+        </div>
+        ${DB.statusBadge(DB.debtStatus(d))}
+      </div>
+    </div>`).join('') :
+    `<div style="padding:10px;text-align:center;color:${c.blocked?'var(--text2)':'var(--green)'};font-size:13px">
+      <i class="fa-solid fa-${c.blocked?'ban':'check'}"></i> ${c.blocked?'Bloklangan':'Qarz yo\'q'}
+    </div>`;
+
+  const allDebts = DB.getDebts(TYPE).filter(d => d.customerId === c.id);
+  const paidCount = allDebts.filter(d => d.status === 'paid').length;
+
+  return `
+    <div class="cust-card ${cardClass}" id="card-${c.id}" style="${c.blocked?'opacity:0.6':''}">
+      <div class="cust-header" onclick="toggleCard('${c.id}')">
+        <div class="cust-info">
+          <div class="cust-name">
+            ${c.name}
+            ${c.blocked ? `<span class="badge badge-black" style="margin-left:6px;font-size:10px"><i class="fa-solid fa-ban"></i> Bloklangan</span>` : ''}
+          </div>
+          <div class="cust-phone"><i class="fa-solid fa-phone" style="font-size:10px;margin-right:3px"></i>${c.phone}</div>
+          ${c.note ? `<div class="cust-note"><i class="fa-solid fa-pen-to-square" style="font-size:10px"></i> ${c.note}</div>` : ''}
+        </div>
+        <div class="cust-debt-sum ${debt === 0 ? 'zero' : ''}">${DB.fmt(debt)} so'm</div>
+        <div class="cust-btns" onclick="event.stopPropagation()">
+          ${!c.blocked ? `
+            <button class="btn-plus" title="Qarz yozish" onclick="openDebtModal('${c.id}')">+</button>
+            <button class="btn-minus" title="Qarz o'chirish" onclick="openRemoveModal('${c.id}')">−</button>
+          ` : `
+            <button class="btn btn-sm btn-unblock" onclick="unblock('${c.id}')"><i class="fa-solid fa-lock-open"></i> Chiqar</button>
+          `}
+          <button class="btn btn-sm btn-ghost" style="padding:4px 8px" onclick="openEditModal('${c.id}')"><i class="fa-solid fa-pen-to-square"></i></button>
+          ${!c.blocked ? `<button class="btn-minus" style="font-size:14px" title="Blok" onclick="openBlockModal('${c.id}')"><i class="fa-solid fa-ban"></i></button>` : ''}
+        </div>
+        <i class="fa-solid fa-chevron-down cust-caret" id="caret-${c.id}"></i>
+      </div>
+      <div class="cust-body" id="body-${c.id}">
+        <div class="cust-body-inner">
+          ${debtRows}
+          ${paidCount > 0 ? `<div style="font-size:11px;color:var(--text2);margin-top:8px;text-align:right"><i class="fa-solid fa-check"></i> ${paidCount} ta to'langan qarz bor</div>` : ''}
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleCard(id) {
+  document.getElementById('body-' + id).classList.toggle('open');
+  document.getElementById('caret-' + id).classList.toggle('open');
+}
+
+// ─── Add Customer ─────────────────────────────────────────────────────────
+function openAddModal() {
+  document.getElementById('addName').value = '';
+  document.getElementById('addPhone').value = '';
+  document.getElementById('addNote').value = '';
+  document.getElementById('addModal').classList.add('show');
+  setTimeout(() => document.getElementById('addName').focus(), 100);
+}
+
+function saveCustomer() {
+  const name = document.getElementById('addName').value.trim();
+  const phone = document.getElementById('addPhone').value.trim();
+  const note = document.getElementById('addNote').value.trim();
+  if (!name) { alert("Ism kiriting!"); return; }
+  if (!phone) { alert("Telefon kiriting!"); return; }
+  DB.addCustomer(TYPE, name, phone, note);
+  closeModal('addModal');
+  renderList();
+}
+
+// ─── Edit Customer ────────────────────────────────────────────────────────
+function openEditModal(id) {
+  const c = DB.getCustomers(TYPE).find(x => x.id === id);
+  if (!c) return;
+  document.getElementById('editId').value = id;
+  document.getElementById('editName').value = c.name;
+  document.getElementById('editPhone').value = c.phone;
+  document.getElementById('editNote').value = c.note || '';
+  document.getElementById('editModal').classList.add('show');
+}
+
+function saveEdit() {
+  const id = document.getElementById('editId').value;
+  const name = document.getElementById('editName').value.trim();
+  const phone = document.getElementById('editPhone').value.trim();
+  const note = document.getElementById('editNote').value.trim();
+  if (!name) { alert("Ism kiriting!"); return; }
+  if (!phone) { alert("Telefon kiriting!"); return; }
+  DB.updateCustomer(TYPE, id, name, phone, note);
+  closeModal('editModal');
+  renderList();
+}
+
+// ─── Block / Unblock ─────────────────────────────────────────────────────
+function openBlockModal(id) {
+  document.getElementById('blockId').value = id;
+  document.getElementById('blockReason').value = '';
+  document.getElementById('blockModal').classList.add('show');
+}
+
+function confirmBlock() {
+  const id = document.getElementById('blockId').value;
+  const reason = document.getElementById('blockReason').value;
+  const c = DB.getCustomers(TYPE).find(x => x.id === id);
+  DB.blockCustomer(TYPE, id, reason);
+  if (c) TG.notifyBlock(DB.getTypeName(TYPE), c.name, reason);
+  closeModal('blockModal');
+  renderList();
+}
+
+function unblock(id) {
+  const c = DB.getCustomers(TYPE).find(x => x.id === id);
+  DB.unblockCustomer(TYPE, id);
+  if (c) TG.notifyUnblock(DB.getTypeName(TYPE), c.name);
+  renderList();
+}
+
+// ─── Add Debt ─────────────────────────────────────────────────────────────
+function openDebtModal(custId) {
+  const c = DB.getCustomers(TYPE).find(x => x.id === custId);
+  if (!c) return;
+  _debtCustId = custId;
+  _debtCustName = c.name;
+  const isPostoyanniy = TYPE === 'postoyanniy';
+  const products = DB.getProducts(TYPE);
+
+  let body = `<div style="background:var(--bg3);padding:12px 14px;border-radius:10px;margin-bottom:16px;font-size:14px">
+    <span style="color:var(--text2);font-size:12px">Mijoz:</span>
+    <strong style="margin-left:6px">${c.name}</strong>
+  </div>`;
+
+  if (isPostoyanniy) {
+    body += `<div class="input-group" style="margin-bottom:14px">
+      <label><i class="fa-solid fa-money-bill-wave"></i> Qarz summasi (so'm)</label>
+      <input type="number" id="debtAmount" placeholder="100000" min="1">
+    </div>`;
+  } else {
+    const opts = products.map(p => `<option>${p.name}</option>`).join('');
+    body += `
+      <div class="input-group" style="margin-bottom:14px">
+        <label><i class="fa-solid fa-drumstick-bite"></i> Go'sht turi</label>
+        <select id="debtMeat">
+          <option value="">— tanlang —</option>${opts}
+        </select>
+      </div>
+      <div class="form-row" style="margin-bottom:14px">
+        <div class="input-group">
+          <label><i class="fa-solid fa-money-bill-wave"></i> Narxi (so'm/kg)</label>
+          <input type="number" id="debtPrice" placeholder="30000" min="1" oninput="calcDebt()">
+        </div>
+        <div class="input-group">
+          <label><i class="fa-solid fa-weight-scale"></i> Miqdor (kg)</label>
+          <input type="number" id="debtKg" placeholder="0.0" step="0.5" min="0.1" oninput="calcDebt()">
+        </div>
+      </div>
+      <div class="calc-result" id="debtCalc" style="display:none;margin-bottom:14px">
+        <span class="label"><i class="fa-solid fa-calculator"></i> Jami summa:</span>
+        <span class="amount" id="debtCalcAmt"></span>
+      </div>`;
+  }
+
+  body += `<div class="input-group">
+    <label><i class="fa-solid fa-pen-to-square"></i> Izoh (ixtiyoriy)</label>
+    <input type="text" id="debtNote" placeholder="">
+  </div>`;
+
+  document.getElementById('debtModalBody').innerHTML = body;
+  document.getElementById('debtModal').classList.add('show');
+}
+
+function calcDebt() {
+  const price = Number(document.getElementById('debtPrice')?.value);
+  const kg = Number(document.getElementById('debtKg')?.value);
+  const calc = document.getElementById('debtCalc');
+  if (price > 0 && kg > 0) {
+    calc.style.display = 'flex';
+    document.getElementById('debtCalcAmt').textContent = DB.fmt(price * kg) + " so'm";
+  } else if (calc) { calc.style.display = 'none'; }
+}
+
+function saveDebt() {
+  const note = document.getElementById('debtNote')?.value || '';
+  let debtData;
+
+  if (TYPE === 'postoyanniy') {
+    const amount = Number(document.getElementById('debtAmount')?.value);
+    if (!amount || amount <= 0) { alert("Summa kiriting!"); return; }
+    debtData = { customerId: _debtCustId, customerName: _debtCustName, meatType: '', pricePerKg: amount, kg: 1, note };
+  } else {
+    const meatSel = document.getElementById('debtMeat');
+    const price = Number(document.getElementById('debtPrice')?.value);
+    const kg = Number(document.getElementById('debtKg')?.value);
+    if (!meatSel?.value) { alert("Go'sht turini tanlang!"); return; }
+    if (!price || price <= 0) { alert("Narxni kiriting!"); return; }
+    if (!kg || kg <= 0) { alert("Miqdorni kiriting!"); return; }
+    debtData = {
+      customerId: _debtCustId, customerName: _debtCustName,
+      meatType: meatSel.value,
+      pricePerKg: price, kg, note
+    };
+  }
+
+  const debt = DB.addDebt(TYPE, debtData);
+  TG.notifyDebt(DB.getTypeName(TYPE), debt.customerName, debt.meatType, debt.kg, debt.total);
+  captureDebtVideo(debt.customerName);
+  closeModal('debtModal');
+  renderList();
+}
+
+// ─── Remove Debt ──────────────────────────────────────────────────────────
+function openRemoveModal(custId) {
+  const c = DB.getCustomers(TYPE).find(x => x.id === custId);
+  const custName = c ? c.name : '';
+  const debts = DB.getDebts(TYPE).filter(d => d.customerId === custId && d.status !== 'paid');
+  let body = `<p style="margin-bottom:14px;color:var(--text2);font-size:13px">
+    <strong style="color:var(--text)">${custName}</strong> — faol qarzlar:
+  </p>`;
+  if (!debts.length) {
+    body += `<div style="text-align:center;color:var(--green);padding:20px"><i class="fa-solid fa-check"></i> Faol qarz yo'q</div>`;
+  } else {
+    body += debts.map(d => `
+      <div class="cust-debt-row" style="margin-bottom:8px">
+        <div>
+          <div style="font-weight:600">#${d.num} — ${DB.fmt(d.remaining)} so'm</div>
+          <div style="font-size:12px;color:var(--text2)">${DB.fmtDate(d.createdAt)}${d.meatType?' • '+d.meatType+' '+d.kg+'kg':''}</div>
+        </div>
+        <button class="btn btn-sm btn-danger" onclick="deleteDebt('${d.id}')">
+          <i class="fa-solid fa-trash"></i> O'chirish
+        </button>
+      </div>`).join('');
+  }
+  document.getElementById('removeModalBody').innerHTML = body;
+  document.getElementById('removeModal').classList.add('show');
+}
+
+function deleteDebt(debtId) {
+  if (!confirm("Bu qarzni o'chirmoqchimisiz?")) return;
+  DB.deleteDebt(TYPE, debtId);
+  closeModal('removeModal');
+  renderList();
+}
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+renderList();
+</script>
+</body>
+</html>

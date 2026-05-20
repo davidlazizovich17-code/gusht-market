@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Go'sht Market — Tizim tanlash</title>
+<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body>
+<div class="select-page">
+  <div class="select-header">
+    <div class="greeting"><i class="fa-solid fa-hand-wave"></i> Xush kelibsiz</div>
+    <h1>Assalomu Alekum!</h1>
+    <p id="subTitle" ondblclick="exportAllPDF()" style="cursor:default;user-select:none">
+      Qaysi tizimga kirishni xohlaysiz?
+    </p>
+  </div>
+
+  <div class="select-grid">
+    <a href="dashboard.html?type=postoyanniy" class="select-card">
+      <div class="select-card-icon"><i class="fa-solid fa-star"></i></div>
+      <h3>Постоянный клиентлар</h3>
+      <p>Доимий, ишончли харидорлар учун алоҳида қарз дафтари</p>
+      <div class="enter-btn"><i class="fa-solid fa-arrow-right"></i> Kirish</div>
+    </a>
+
+    <a href="dashboard.html?type=optom" class="select-card">
+      <div class="select-card-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+      <h3>Оптомний клиентлар</h3>
+      <p>Катта ҳажмда олувчи оптом харидорлар учун дафтар</p>
+      <div class="enter-btn"><i class="fa-solid fa-arrow-right"></i> Kirish</div>
+    </a>
+
+    <a href="dashboard.html?type=klient" class="select-card">
+      <div class="select-card-icon"><i class="fa-solid fa-user"></i></div>
+      <h3>Клиент</h3>
+      <p>Оддий харидорлар учун умумий қарз дафтари</p>
+      <div class="enter-btn"><i class="fa-solid fa-arrow-right"></i> Kirish</div>
+    </a>
+  </div>
+
+  <div class="select-logout">
+    <a href="#" onclick="DB.logout();return false">
+      <i class="fa-solid fa-right-from-bracket"></i> Chiqish
+    </a>
+  </div>
+</div>
+
+<!-- Loading overlay -->
+<div id="pdfOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.75);z-index:9999;
+  display:none;align-items:center;justify-content:center;flex-direction:column;gap:16px">
+  <div style="width:56px;height:56px;border:4px solid #333;border-top-color:#e74c3c;
+    border-radius:50%;animation:spin 0.8s linear infinite"></div>
+  <p style="color:#f0f0f0;font-size:15px" id="pdfStatus">PDF tayyorlanmoqda...</p>
+</div>
+<style>@keyframes spin{to{transform:rotate(360deg)}}</style>
+
+<script src="data.js"></script>
+<script src="telegram.js"></script>
+<script>
+DB.checkLogin();
+
+const TYPE_LIST = [
+  { key: 'postoyanniy', label: 'Postoyanniy klientlar' },
+  { key: 'optom',       label: 'Optomiy klientlar'    },
+  { key: 'klient',      label: 'Klient'                }
+];
+
+const TG_TOKEN  = '8602981625:AAE0Q0BBMhFaL3ZpgFHXqJy8uGOlKVav2NQ';
+const TG_CHATID = '7136325654';
+const TG_API    = 'https://api.telegram.org/bot';
+
+function setStatus(msg) {
+  document.getElementById('pdfStatus').textContent = msg;
+}
+
+function showLoader(on) {
+  const el = document.getElementById('pdfOverlay');
+  el.style.display = on ? 'flex' : 'none';
+}
+
+async function exportAllPDF() {
+  if (!window.jspdf) { alert('PDF kutubxonasi yuklanmagan, qayta urining.'); return; }
+  showLoader(true);
+  setStatus('Ma\'lumotlar yig\'ilmoqda...');
+
+  try {
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+    const dateStr = new Date().toLocaleDateString('uz-UZ');
+    let firstSection = true;
+
+    for (const { key, label } of TYPE_LIST) {
+      setStatus(`${label} tayyorlanmoqda...`);
+
+      // Faqat qarz bor mijozlarni olish
+      const customers = DB.getCustomers(key).filter(c => !c.blocked);
+      const rows = [];
+
+      customers.forEach(c => {
+        const debts = DB.getDebts(key).filter(d => d.customerId === c.id && d.status !== 'paid');
+        if (!debts.length) return;
+
+        debts.forEach(d => {
+          const sana = DB.fmtDate(d.createdAt);
+          rows.push([
+            String(rows.length + 1),
+            c.name,
+            c.phone || '',
+            Number(d.remaining).toLocaleString('uz-UZ') + " so'm",
+            sana,
+            d.note || '',
+            ''   // imzo uchun bo'sh joy
+          ]);
+        });
+      });
+
+      if (!rows.length) continue;
+
+      // Har bir baza yangi sahifadan boshlanadi (birinchisidan tashqari)
+      if (!firstSection) doc.addPage();
+      firstSection = false;
+
+      // Baza sarlavhasi
+      doc.setFontSize(13);
+      doc.setFont('helvetica', 'bold');
+      doc.text(label + ' — Qarzdorlar ro\'yxati', 105, 14, { align: 'center' });
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Sana: ${dateStr}   |   Jami: ${rows.length} ta qarz`, 105, 20, { align: 'center' });
+
+      // Raqamlarni har sahifada qayta hisoblash
+      let rowNum = 0;
+      const numberedRows = rows.map(r => { rowNum++; return [String(rowNum), ...r.slice(1)]; });
+
+      doc.autoTable({
+        startY: 24,
+        head: [['#', 'Ism familiya', 'Telefon', 'Summa', 'Sana', 'Izoh', 'Imzo']],
+        body: numberedRows,
+        styles: {
+          fontSize: 8,
+          cellPadding: { top: 3, bottom: 3, left: 2, right: 2 },
+          lineColor: [210, 210, 210],
+          lineWidth: 0.25,
+          overflow: 'linebreak'
+        },
+        headStyles: {
+          fillColor: [192, 57, 43],
+          textColor: 255,
+          fontStyle: 'bold',
+          fontSize: 8
+        },
+        columnStyles: {
+          0: { cellWidth: 8,  halign: 'center' },
+          1: { cellWidth: 42 },
+          2: { cellWidth: 30 },
+          3: { cellWidth: 32, halign: 'right' },
+          4: { cellWidth: 22 },
+          5: { cellWidth: 28 },
+          6: { cellWidth: 30 }   // imzo — keng bo'sh joy
+        },
+        alternateRowStyles: { fillColor: [248, 248, 248] },
+        // Sahifa to'lganda avtomatik yangi sahifa + sarlavha
+        didDrawPage(data) {
+          // Har yangi sahifaning tepasiga baza nomini qayta yozish
+          if (data.pageNumber > 1) {
+            doc.setFontSize(9);
+            doc.setFont('helvetica', 'bold');
+            doc.setTextColor(192, 57, 43);
+            doc.text(label + ' (davomi)', 14, 8);
+            doc.setTextColor(0, 0, 0);
+          }
+        },
+        margin: { top: 10 }
+      });
+
+      // Jami summa
+      const total = rows.reduce((s, r) => {
+        const num = parseInt(r[3].replace(/[^\d]/g, ''), 10) || 0;
+        return s + num;
+      }, 0);
+      const finalY = doc.lastAutoTable.finalY + 6;
+      doc.setFont('helvetica', 'bold');
+      doc.setFontSize(10);
+      doc.text(`Jami: ${total.toLocaleString('uz-UZ')} so'm`, 14, finalY);
+    }
+
+    setStatus('PDF yuborilmoqda...');
+
+    const blob = doc.output('blob');
+    const fname = `barcha_qarzlar_${new Date().toISOString().split('T')[0]}.pdf`;
+
+    // Jami mijozlar soni
+    let totalCount = 0;
+    let totalSum = 0;
+    TYPE_LIST.forEach(({ key }) => {
+      DB.getCustomers(key).filter(c => !c.blocked).forEach(c => {
+        const debts = DB.getDebts(key).filter(d => d.customerId === c.id && d.status !== 'paid');
+        if (debts.length) {
+          totalCount++;
+          totalSum += debts.reduce((s, d) => s + d.remaining, 0);
+        }
+      });
+    });
+
+    const caption =
+      `📋 Barcha bazalar — umumiy qarzdorlar ro'yxati\n` +
+      `👥 Jami qarzdor: ${totalCount} ta\n` +
+      `💰 Umumiy qarz: ${totalSum.toLocaleString('uz-UZ')} so'm\n` +
+      `📅 ${dateStr}`;
+
+    const fd = new FormData();
+    fd.append('chat_id', TG_CHATID);
+    fd.append('document', blob, fname);
+    fd.append('caption', caption);
+
+    const res  = await fetch(`${TG_API}${TG_TOKEN}/sendDocument`, { method: 'POST', body: fd });
+    const data = await res.json();
+
+    showLoader(false);
+
+    if (data.ok) {
+      alert('✅ PDF Telegramga yuborildi!\n👥 ' + totalCount + ' ta mijoz\n💰 ' + totalSum.toLocaleString('uz-UZ') + " so'm");
+    } else {
+      alert('❌ Xato: ' + (data.description || 'Noma\'lum xato'));
+    }
+
+  } catch (e) {
+    showLoader(false);
+    alert('❌ Xato: ' + e.message);
+  }
+}
+</script>
+</body>
+</html>
