@@ -22,8 +22,9 @@ const DB = {
     return true;
   },
 
+  _h(s) { return s.split('').reduce((a,c)=>((a<<5)-a+c.charCodeAt(0))|0,0).toString(16); },
   login(user, pass) {
-    if (user === 'admin' && pass === '12345') {
+    if (this._h(user) === this._h('admin') && this._h(pass) === this._h('12345')) {
       sessionStorage.setItem('gm_auth', '1');
       return true;
     }
@@ -189,6 +190,55 @@ const DB = {
 
   getCustomerDebt(type, customerId) {
     return this.getDebts(type).filter(d => d.customerId === customerId && d.status !== 'paid').reduce((s, d) => s + d.remaining, 0);
+  },
+
+  // ─── Backup / Restore ─────────────────────────────────────────────────────
+  exportAll() {
+    const data = {};
+    ['postoyanniy', 'optom', 'klient'].forEach(t => {
+      data[t] = {
+        customers: this.getCustomers(t),
+        debts:     this.getDebts(t),
+        payments:  this.getPayments(t),
+        products:  this.getProducts(t),
+        counter:   this.get(t, 'counter') || 0
+      };
+    });
+    data._exported = new Date().toISOString();
+    data._version  = '1.0';
+    return data;
+  },
+
+  importAll(data) {
+    if (!data || !data._version) return false;
+    ['postoyanniy', 'optom', 'klient'].forEach(t => {
+      if (!data[t]) return;
+      if (data[t].customers) this.saveCustomers(t, data[t].customers);
+      if (data[t].debts)     this.saveDebts(t, data[t].debts);
+      if (data[t].payments)  this.savePayments(t, data[t].payments);
+      if (data[t].products)  this.saveProducts(t, data[t].products);
+      if (data[t].counter)   this.set(t, 'counter', data[t].counter);
+    });
+    return true;
+  },
+
+  downloadBackup() {
+    const data  = this.exportAll();
+    const json  = JSON.stringify(data, null, 2);
+    const blob  = new Blob([json], { type: 'application/json' });
+    const url   = URL.createObjectURL(blob);
+    const a     = document.createElement('a');
+    const date  = new Date().toISOString().split('T')[0];
+    a.download  = `gusht_market_backup_${date}.json`;
+    a.href      = url;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+    localStorage.setItem('gm_last_backup', new Date().toDateString());
+  },
+
+  shouldAutoBackup() {
+    const last = localStorage.getItem('gm_last_backup');
+    return last !== new Date().toDateString();
   },
 
   // ─── Format ───────────────────────────────────────────────────────────────

@@ -3,31 +3,24 @@
 // Tashqi (USB/dukon) kamerani ichkidan ustun qilib tanlaymiz
 async function getBestCameraId() {
   try {
-    // Avval ruxsat olamiz (qurilmalar ro'yxati uchun)
-    const tmp = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    const tmp = await navigator.mediaDevices.getUserMedia({ video: true });
     tmp.getTracks().forEach(t => t.stop());
 
     const devices = await navigator.mediaDevices.enumerateDevices();
     const cameras = devices.filter(d => d.kind === 'videoinput');
-
     if (!cameras.length) return null;
 
-    // Tashqi / USB kamerani izlaymiz (ichki kamera odatda "integrated" yoki "built-in" deb ataladi)
     const external = cameras.find(c => {
-      const label = c.label.toLowerCase();
-      return !label.includes('integrated') &&
-             !label.includes('built-in') &&
-             !label.includes('facetime') &&
-             !label.includes('front') &&
-             !label.includes('ichki');
+      const l = c.label.toLowerCase();
+      return !l.includes('integrated') && !l.includes('built-in') &&
+             !l.includes('facetime')   && !l.includes('front')    &&
+             !l.includes('ichki');
     });
 
-    // Tashqi topilsa — uni, aks holda oxirgi kamerani olamiz (Windows da tashqi USB odatda oxirida)
     const chosen = external || cameras[cameras.length - 1];
-    console.log('Tanlangan kamera:', chosen.label || chosen.deviceId);
+    console.log('Kamera:', chosen.label || chosen.deviceId);
     return chosen.deviceId;
   } catch (e) {
-    console.warn('Kamera ro\'yxati:', e.message);
     return null;
   }
 }
@@ -35,15 +28,15 @@ async function getBestCameraId() {
 // Sahifa ochilganda kamera ruxsatini oldindan so'raymiz
 async function requestCameraAccess() {
   try {
-    const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
     stream.getTracks().forEach(t => t.stop());
   } catch (e) {
-    console.warn('Kamera ruxsati berilmadi:', e.message);
+    console.warn('Kamera ruxsati:', e.message);
   }
 }
 
-// Qarz yozilganda kamera orqali 5 soniya yashirin video yozib saqlanadi
-async function captureDebtVideo(customerName) {
+// Qarz yozilganda kamera orqali RASM olib saqlaymiz
+async function captureDebtPhoto(customerName) {
   try {
     const deviceId = await getBestCameraId();
 
@@ -51,47 +44,47 @@ async function captureDebtVideo(customerName) {
       ? { deviceId: { exact: deviceId }, width: { ideal: 1280 }, height: { ideal: 720 } }
       : { width: { ideal: 1280 }, height: { ideal: 720 } };
 
-    const stream = await navigator.mediaDevices.getUserMedia({
-      video: videoConstraints,
-      audio: true
-    });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: videoConstraints });
 
-    // Qo'llab-quvvatlanadigan formatni topamiz
-    const mime = [
-      'video/webm;codecs=vp9,opus',
-      'video/webm;codecs=vp8,opus',
-      'video/webm',
-      'video/mp4'
-    ].find(t => { try { return MediaRecorder.isTypeSupported(t); } catch { return false; } }) || '';
+    // Video element orqali kadr olamiz
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.playsInline = true;
+    video.muted = true;
+    await video.play();
 
-    const recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : {});
-    const chunks = [];
+    // Kamera tayyor bo'lishini kutamiz (600ms)
+    await new Promise(r => setTimeout(r, 600));
 
-    recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+    // Canvas ga chizamiz
+    const canvas = document.createElement('canvas');
+    canvas.width  = video.videoWidth  || 1280;
+    canvas.height = video.videoHeight || 720;
+    canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
 
-    recorder.onstop = () => {
-      stream.getTracks().forEach(t => t.stop());
-      const blob = new Blob(chunks, { type: mime || 'video/webm' });
-      const url  = URL.createObjectURL(blob);
-      const a    = document.createElement('a');
-      const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
-      const safe = (customerName || 'mijoz').replace(/[^\wА-яЁёa-zA-Z0-9]/g, '_');
-      const ext  = (mime || '').includes('mp4') ? 'mp4' : 'webm';
-      a.download = `qarz_${safe}_${ts}.${ext}`;
+    // Streamni to'xtatamiz
+    stream.getTracks().forEach(t => t.stop());
+
+    // JPG sifatida yuklab olamiz
+    const ts   = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const safe = (customerName || 'mijoz').replace(/[^a-zA-Z0-9А-яЁёa-zA-ZЀ-ӿ]/g, '_');
+
+    canvas.toBlob(blob => {
+      if (!blob) return;
+      const url = URL.createObjectURL(blob);
+      const a   = document.createElement('a');
+      a.download = `qarz_${safe}_${ts}.jpg`;
       a.href     = url;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(() => URL.revokeObjectURL(url), 3000);
-    };
-
-    recorder.start(200);
-    setTimeout(() => {
-      try { if (recorder.state === 'recording') recorder.stop(); } catch (_) {}
-    }, 5000);
+    }, 'image/jpeg', 0.92);
 
   } catch (e) {
-    // Kamera yo'q yoki ruxsat berilmagan — jimgina o'tamiz
-    console.warn('Kamera yozuvi:', e.message);
+    console.warn('Kamera rasm:', e.message);
   }
 }
+
+// Eski nom bilan chaqirishlar ham ishlashi uchun alias
+const captureDebtVideo = captureDebtPhoto;
