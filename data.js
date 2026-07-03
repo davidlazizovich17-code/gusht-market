@@ -24,7 +24,7 @@ const DB = {
 
   _h(s) { return s.split('').reduce((a,c)=>((a<<5)-a+c.charCodeAt(0))|0,0).toString(16); },
   login(user, pass) {
-    if (this._h(user) === this._h('admin') && this._h(pass) === this._h('12345')) {
+    if (this._h(user) === this._h('gushtmarket') && this._h(pass) === this._h('937221940')) {
       sessionStorage.setItem('gm_auth', '1');
       return true;
     }
