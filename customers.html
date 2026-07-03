@@ -147,12 +147,38 @@
 <div class="modal-overlay" id="removeModal">
   <div class="modal">
     <div class="modal-header">
-      <div class="modal-title"><i class="fa-solid fa-trash"></i> Qarzni o'chirish</div>
+      <div class="modal-title"><i class="fa-solid fa-scissors"></i> Qarz kamaytirish</div>
       <button class="modal-close" onclick="closeModal('removeModal')"><i class="fa-solid fa-xmark"></i></button>
     </div>
     <div class="modal-body" id="removeModalBody"></div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('removeModal')">Yopish</button>
+    </div>
+  </div>
+</div>
+
+<!-- DELETE CUSTOMER MODAL -->
+<div class="modal-overlay" id="deleteCustomerModal">
+  <div class="modal" style="max-width:400px">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-trash"></i> Mijozni o'chirish</div>
+      <button class="modal-close" onclick="closeModal('deleteCustomerModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body">
+      <div class="alert alert-red" style="margin-bottom:14px">
+        <i class="fa-solid fa-triangle-exclamation"></i>
+        Mijoz va barcha qarzlari butunlay o'chib ketadi!
+      </div>
+      <p id="deleteCustomerNameLabel" style="font-weight:600;margin-bottom:16px;font-size:15px"></p>
+      <div class="input-group">
+        <label><i class="fa-solid fa-lock"></i> Parol kiriting</label>
+        <input type="password" id="deletePass" placeholder="•••••" onkeydown="if(event.key==='Enter')confirmDeleteCustomer()">
+      </div>
+      <input type="hidden" id="deleteCustomerId">
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('deleteCustomerModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-danger" onclick="confirmDeleteCustomer()"><i class="fa-solid fa-trash"></i> O'chirish</button>
     </div>
   </div>
 </div>
@@ -306,6 +332,9 @@ function renderList() {
   if (filter === 'active') customers = customers.filter(c => !c.blocked);
   if (filter === 'blocked') customers = customers.filter(c => c.blocked);
 
+  // Top qarzdorlar birinchi
+  customers.sort((a, b) => DB.getCustomerDebt(TYPE, b.id) - DB.getCustomerDebt(TYPE, a.id));
+
   const all = DB.getCustomers(TYPE);
   const blocked = all.filter(c => c.blocked).length;
   const debtors = all.filter(c => !c.blocked && DB.getCustomerDebt(TYPE, c.id) > 0).length;
@@ -376,6 +405,7 @@ function buildCustCard(c) {
           `}
           <button class="btn btn-sm btn-ghost" style="padding:4px 8px" onclick="openEditModal('${c.id}')"><i class="fa-solid fa-pen-to-square"></i></button>
           ${!c.blocked ? `<button class="btn-minus" style="font-size:14px" title="Blok" onclick="openBlockModal('${c.id}')"><i class="fa-solid fa-ban"></i></button>` : ''}
+          <button class="btn btn-sm btn-danger" style="padding:4px 8px" title="Mijozni o'chirish" onclick="openDeleteCustomerModal('${c.id}')"><i class="fa-solid fa-trash"></i></button>
         </div>
         <i class="fa-solid fa-chevron-down cust-caret" id="caret-${c.id}"></i>
       </div>
@@ -552,36 +582,68 @@ function saveDebt() {
   renderList();
 }
 
-// ─── Remove Debt ──────────────────────────────────────────────────────────
+// ─── Remove / WriteOff Debt ───────────────────────────────────────────────
 function openRemoveModal(custId) {
   const c = DB.getCustomers(TYPE).find(x => x.id === custId);
   const custName = c ? c.name : '';
   const debts = DB.getDebts(TYPE).filter(d => d.customerId === custId && d.status !== 'paid');
   let body = `<p style="margin-bottom:14px;color:var(--text2);font-size:13px">
-    <strong style="color:var(--text)">${custName}</strong> — faol qarzlar:
+    <strong style="color:var(--text)">${custName}</strong> — qarz kamaytirish:
   </p>`;
   if (!debts.length) {
     body += `<div style="text-align:center;color:var(--green);padding:20px"><i class="fa-solid fa-check"></i> Faol qarz yo'q</div>`;
   } else {
-    body += debts.map(d => `
-      <div class="cust-debt-row" style="margin-bottom:8px">
-        <div>
-          <div style="font-weight:600">#${d.num} — ${DB.fmt(d.remaining)} so'm</div>
-          <div style="font-size:12px;color:var(--text2)">${DB.fmtDate(d.createdAt)}${d.meatType?' • '+d.meatType+' '+d.kg+'kg':''}</div>
+    body += debts.map(d => {
+      const isOverdue = DB.debtStatus(d) === 'overdue';
+      return `
+      <div class="cust-debt-row" style="margin-bottom:12px;flex-direction:column;align-items:stretch;gap:8px;${isOverdue?'border-left:3px solid var(--overdue);padding-left:10px':''}">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-weight:600;color:${isOverdue?'var(--overdue)':'var(--text)'}">#${d.num} — ${DB.fmt(d.remaining)} so'm</div>
+            <div style="font-size:12px;color:var(--text2)">${DB.fmtDate(d.createdAt)}${d.meatType?' • '+d.meatType+' '+d.kg+'kg':''}${isOverdue?' • <span style="color:var(--overdue)">2+ oy</span>':''}</div>
+          </div>
         </div>
-        <button class="btn btn-sm btn-danger" onclick="deleteDebt('${d.id}')">
-          <i class="fa-solid fa-trash"></i> O'chirish
-        </button>
-      </div>`).join('');
+        <div style="display:flex;gap:8px;align-items:center">
+          <input type="number" id="wo-${d.id}" placeholder="Kamaytirish summasi" min="1" max="${d.remaining}"
+            style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:14px;outline:none">
+          <button class="btn btn-sm btn-danger" onclick="doWriteOff('${d.id}', ${d.remaining})">
+            <i class="fa-solid fa-scissors"></i> Kamaytir
+          </button>
+        </div>
+      </div>`;
+    }).join('');
   }
   document.getElementById('removeModalBody').innerHTML = body;
   document.getElementById('removeModal').classList.add('show');
 }
 
-function deleteDebt(debtId) {
-  if (!confirm("Bu qarzni o'chirmoqchimisiz?")) return;
-  DB.deleteDebt(TYPE, debtId);
+function doWriteOff(debtId, maxAmount) {
+  const input = document.getElementById('wo-' + debtId);
+  const amount = Number(input ? input.value : 0);
+  if (!amount || amount <= 0) { alert("Summa kiriting!"); return; }
+  if (amount > maxAmount) { alert(`Maksimal summa: ${DB.fmt(maxAmount)} so'm`); return; }
+  DB.writeOffDebt(TYPE, debtId, amount);
   closeModal('removeModal');
+  renderList();
+}
+
+// ─── Delete Customer ──────────────────────────────────────────────────────
+function openDeleteCustomerModal(custId) {
+  const c = DB.getCustomers(TYPE).find(x => x.id === custId);
+  if (!c) return;
+  document.getElementById('deleteCustomerId').value = custId;
+  document.getElementById('deleteCustomerNameLabel').textContent = c.name;
+  document.getElementById('deletePass').value = '';
+  document.getElementById('deleteCustomerModal').classList.add('show');
+  setTimeout(() => document.getElementById('deletePass').focus(), 100);
+}
+
+function confirmDeleteCustomer() {
+  const pass = document.getElementById('deletePass').value;
+  if (pass !== '12345') { alert("Parol noto'g'ri!"); document.getElementById('deletePass').value = ''; return; }
+  const custId = document.getElementById('deleteCustomerId').value;
+  DB.deleteCustomerWithDebts(TYPE, custId);
+  closeModal('deleteCustomerModal');
   renderList();
 }
 

@@ -140,6 +140,28 @@ const DB = {
     this.saveDebts(type, this.getDebts(type).filter(d => d.id !== id));
   },
 
+  writeOffDebt(type, debtId, amount) {
+    const debts = this.getDebts(type);
+    const debt = debts.find(d => d.id === debtId);
+    if (!debt) return 0;
+    const writeOff = Math.min(Math.max(0, Number(amount)), debt.remaining);
+    if (writeOff <= 0) return 0;
+    debt.remaining -= writeOff;
+    debt.total = debt.paid + debt.remaining;
+    if (debt.remaining <= 0) {
+      this.saveDebts(type, debts.filter(d => d.id !== debtId));
+    } else {
+      this.saveDebts(type, debts);
+    }
+    return writeOff;
+  },
+
+  deleteCustomerWithDebts(type, customerId) {
+    this.saveCustomers(type, this.getCustomers(type).filter(c => c.id !== customerId));
+    this.saveDebts(type, this.getDebts(type).filter(d => d.customerId !== customerId));
+    this.savePayments(type, this.getPayments(type).filter(p => p.customerId !== customerId));
+  },
+
   // ─── Payments ─────────────────────────────────────────────────────────────
   getPayments(type) { return this.get(type, 'payments') || []; },
   savePayments(type, d) { this.set(type, 'payments', d); },
