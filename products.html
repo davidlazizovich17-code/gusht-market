@@ -101,6 +101,7 @@
   </div>
 </div>
 
+<script src="supabase.js"></script>
 <script src="data.js"></script>
 <script src="telegram.js"></script>
 <script>
@@ -180,7 +181,7 @@ function confirmDelete() {
 
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-renderProducts();
+Cloud.pull().then(() => renderProducts());
 </script>
 </body>
 </html>

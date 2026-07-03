@@ -13,7 +13,9 @@ const DB = {
   },
 
   set(type, key, data) {
-    localStorage.setItem(this._key(type, key), JSON.stringify(data));
+    const k = this._key(type, key);
+    localStorage.setItem(k, JSON.stringify(data));
+    if (typeof Cloud !== 'undefined') Cloud.push(k, data);
   },
 
   // ─── Auth ─────────────────────────────────────────────────────────────

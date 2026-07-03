@@ -32,6 +32,7 @@
   </div>
 </div>
 
+<script src="supabase.js"></script>
 <script src="data.js"></script>
 <script src="telegram.js"></script>
 <script>
@@ -83,7 +84,7 @@ function unblock(id) {
   }
 }
 
-render();
+Cloud.pull().then(() => render());
 </script>
 </body>
 </html>

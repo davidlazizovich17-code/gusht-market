@@ -157,6 +157,7 @@
   </div>
 </div>
 
+<script src="supabase.js"></script>
 <script src="data.js"></script>
 <script src="telegram.js"></script>
 <script src="camera.js"></script>
@@ -546,7 +547,7 @@ function saveDebt() {
 
   const debt = DB.addDebt(TYPE, debtData);
   TG.notifyDebt(DB.getTypeName(TYPE), debt.customerName, debt.meatType, debt.kg, debt.total);
-  captureDebtVideo(debt.customerName);
+  // captureDebtVideo(debt.customerName);
   closeModal('debtModal');
   renderList();
 }
@@ -586,7 +587,7 @@ function deleteDebt(debtId) {
 
 function closeModal(id) { document.getElementById(id).classList.remove('show'); }
 
-renderList();
+Cloud.pull().then(() => renderList());
 </script>
 </body>
 </html>
