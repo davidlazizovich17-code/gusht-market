@@ -450,46 +450,12 @@ function handleImportFile(input) {
   <p style="color:#f0f0f0;font-size:15px" id="pdfStatus">PDF tayyorlanmoqda...</p>
 </div>
 
+<script src="supabase.js"></script>
 <script src="data.js"></script>
 <script src="telegram.js"></script>
 <script>
 DB.checkLogin();
-
-// ─── Kunlik avtomatik JSON backup → Telegram ───────────────
-async function autoBackupToTelegram() {
-  if (!DB.shouldAutoBackup()) return;
-  try {
-    const data    = DB.exportAll();
-    const json    = JSON.stringify(data);
-    const blob    = new Blob([json], { type: 'application/json' });
-    const date    = new Date().toISOString().split('T')[0];
-    const fname   = `backup_${date}.json`;
-
-    let totalCust = 0, totalDebt = 0;
-    ['postoyanniy','optom','klient'].forEach(t => {
-      totalCust += DB.getCustomers(t).filter(c => !c.blocked).length;
-      totalDebt += DB.getStats(t).totalDebt;
-    });
-
-    const fd = new FormData();
-    fd.append('chat_id', '7136325654');
-    fd.append('document', blob, fname);
-    fd.append('caption',
-      `💾 Kunlik avtomatik backup\n` +
-      `📅 ${new Date().toLocaleDateString('uz-UZ')}\n` +
-      `👥 Jami mijoz: ${totalCust} ta\n` +
-      `💰 Jami qarz: ${Number(totalDebt).toLocaleString('uz-UZ')} so'm`
-    );
-
-    const res = await fetch(`https://api.telegram.org/bot8602981625:AAE0Q0BBMhFaL3ZpgFHXqJy8uGOlKVav2NQ/sendDocument`,
-      { method: 'POST', body: fd });
-    const result = await res.json();
-    if (result.ok) localStorage.setItem('gm_last_backup', new Date().toDateString());
-  } catch (e) { console.warn('Auto backup:', e.message); }
-}
-
-// Sahifa ochilganda 2 soniyadan keyin tekshiradi (foydalanuvchini bloklamasin)
-setTimeout(autoBackupToTelegram, 2000);
+Cloud.pull();
 
 const TYPE_LIST = [
   { key: 'postoyanniy', label: 'Postoyanniy klientlar' },
@@ -501,28 +467,26 @@ const TG_TOKEN  = '8602981625:AAE0Q0BBMhFaL3ZpgFHXqJy8uGOlKVav2NQ';
 const TG_CHATID = '7136325654';
 const TG_API    = 'https://api.telegram.org/bot';
 
-function setStatus(msg) {
-  document.getElementById('pdfStatus').textContent = msg;
-}
+function setStatus(msg) { document.getElementById('pdfStatus').textContent = msg; }
+function showLoader(on) { document.getElementById('pdfOverlay').style.display = on ? 'flex' : 'none'; }
 
-function showLoader(on) {
-  const el = document.getElementById('pdfOverlay');
-  el.style.display = on ? 'flex' : 'none';
-}
-
-async function exportAllPDF() {
-  if (!window.jspdf) { alert('PDF kutubxonasi yuklanmagan, qayta urining.'); return; }
-  showLoader(true);
-  setStatus('Ma\'lumotlar yig\'ilmoqda...');
+// ─── Asosiy PDF generator + yuboruvchi ───────────────────────
+async function _buildAndSendPDF(showUI) {
+  if (!window.jspdf) {
+    if (showUI) alert('PDF kutubxonasi yuklanmagan, qayta urining.');
+    return false;
+  }
+  if (showUI) { showLoader(true); setStatus("Ma'lumotlar yig'ilmoqda..."); }
 
   try {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
     const dateStr = new Date().toLocaleDateString('uz-UZ');
     let firstSection = true;
+    let totalCount = 0, totalSum = 0;
 
     for (const { key, label } of TYPE_LIST) {
-      setStatus(`${label} tayyorlanmoqda...`);
+      if (showUI) setStatus(`${label} tayyorlanmoqda...`);
 
       const customers = DB.getCustomers(key).filter(c => !c.blocked);
       const rows = [];
@@ -540,19 +504,18 @@ async function exportAllPDF() {
             d.note || '',
             ''
           ]);
+          totalCount++;
+          totalSum += d.remaining;
         });
       });
 
       if (!rows.length) continue;
-
       if (!firstSection) doc.addPage();
       firstSection = false;
 
-      doc.setFontSize(13);
-      doc.setFont('helvetica', 'bold');
-      doc.text(label + ' — Qarzdorlar ro\'yxati', 105, 14, { align: 'center' });
-      doc.setFontSize(9);
-      doc.setFont('helvetica', 'normal');
+      doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+      doc.text(label + " — Qarzdorlar ro'yxati", 105, 14, { align: 'center' });
+      doc.setFontSize(9); doc.setFont('helvetica', 'normal');
       doc.text(`Sana: ${dateStr}   |   Jami: ${rows.length} ta qarz`, 105, 20, { align: 'center' });
 
       let rowNum = 0;
@@ -565,7 +528,7 @@ async function exportAllPDF() {
         styles: { fontSize:8, cellPadding:{top:3,bottom:3,left:2,right:2}, lineColor:[210,210,210], lineWidth:0.25, overflow:'linebreak' },
         headStyles: { fillColor:[192,57,43], textColor:255, fontStyle:'bold', fontSize:8 },
         columnStyles: {
-          0:{ cellWidth:8,  halign:'center' },
+          0:{ cellWidth:8, halign:'center' },
           1:{ cellWidth:42 },
           2:{ cellWidth:30 },
           3:{ cellWidth:32, halign:'right' },
@@ -585,27 +548,18 @@ async function exportAllPDF() {
         margin: { top: 10 }
       });
 
-      const total = rows.reduce((s,r) => s + (parseInt(r[3].replace(/[^\d]/g,''),10)||0), 0);
+      const sectionTotal = rows.reduce((s,r) => s + (parseInt(r[3].replace(/[^\d]/g,''),10)||0), 0);
       const finalY = doc.lastAutoTable.finalY + 6;
       doc.setFont('helvetica','bold'); doc.setFontSize(10);
-      doc.text(`Jami: ${total.toLocaleString('uz-UZ')} so'm`, 14, finalY);
+      doc.text(`Jami: ${sectionTotal.toLocaleString('uz-UZ')} so'm`, 14, finalY);
     }
 
-    setStatus('PDF yuborilmoqda...');
+    if (showUI) setStatus('PDF yuborilmoqda...');
 
-    const blob = doc.output('blob');
+    const blob  = doc.output('blob');
     const fname = `barcha_qarzlar_${new Date().toISOString().split('T')[0]}.pdf`;
-
-    let totalCount = 0, totalSum = 0;
-    TYPE_LIST.forEach(({ key }) => {
-      DB.getCustomers(key).filter(c => !c.blocked).forEach(c => {
-        const debts = DB.getDebts(key).filter(d => d.customerId === c.id && d.status !== 'paid');
-        if (debts.length) { totalCount++; totalSum += debts.reduce((s,d)=>s+d.remaining,0); }
-      });
-    });
-
     const caption =
-      `📋 Barcha bazalar — umumiy qarzdorlar ro'yxati\n` +
+      `📋 Kunlik hisobot — barcha bazalar\n` +
       `👥 Jami qarzdor: ${totalCount} ta\n` +
       `💰 Umumiy qarz: ${totalSum.toLocaleString('uz-UZ')} so'm\n` +
       `📅 ${dateStr}`;
@@ -616,19 +570,38 @@ async function exportAllPDF() {
     fd.append('caption', caption);
 
     const res  = await fetch(`${TG_API}${TG_TOKEN}/sendDocument`, { method:'POST', body:fd });
-    const data = await res.json();
+    const json = await res.json();
 
-    showLoader(false);
-    if (data.ok) {
-      alert('✅ PDF Telegramga yuborildi!\n👥 ' + totalCount + ' ta mijoz\n💰 ' + totalSum.toLocaleString('uz-UZ') + " so'm");
-    } else {
-      alert('❌ Xato: ' + (data.description || 'Noma\'lum xato'));
+    localStorage.setItem('gm_last_backup', new Date().toDateString());
+
+    if (showUI) {
+      showLoader(false);
+      if (json.ok) {
+        alert('✅ PDF Telegramga yuborildi!\n👥 ' + totalCount + ' ta\n💰 ' + totalSum.toLocaleString('uz-UZ') + " so'm");
+      } else {
+        alert('❌ Xato: ' + (json.description || "Noma'lum xato"));
+      }
     }
+    return json.ok;
   } catch (e) {
-    showLoader(false);
-    alert('❌ Xato: ' + e.message);
+    if (showUI) { showLoader(false); alert('❌ Xato: ' + e.message); }
+    console.warn('PDF send error:', e.message);
+    return false;
   }
 }
+
+// ─── Qo'lda chaqirish (double-click) ─────────────────────────
+async function exportAllPDF() {
+  await _buildAndSendPDF(true);
+}
+
+// ─── Kunlik avtomatik PDF → Telegram (sahifa ochilganda) ─────
+async function autoReportPDF() {
+  if (!DB.shouldAutoBackup()) return;
+  await _buildAndSendPDF(false);
+}
+
+setTimeout(autoReportPDF, 3000);
 </script>
 </body>
 </html>
