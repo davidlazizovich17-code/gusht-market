@@ -368,7 +368,6 @@ function buildCustCard(c) {
     <div class="cust-debt-row">
       <div>
         <span style="color:var(--text2);font-size:12px">#${d.num} • ${DB.fmtDate(d.createdAt)}</span>
-        ${d.meatType ? `<span class="meat-tag" style="margin-left:6px;font-size:11px"><i class="fa-solid fa-drumstick-bite"></i> ${d.meatType} ${d.kg}kg</span>` : ''}
       </div>
       <div style="text-align:right">
         <div style="font-weight:700;color:${DB.debtStatus(d)==='overdue'?'var(--overdue)':'var(--red-light)'}">
@@ -496,45 +495,15 @@ function openDebtModal(custId) {
   if (!c) return;
   _debtCustId = custId;
   _debtCustName = c.name;
-  const isPostoyanniy = TYPE === 'postoyanniy';
-  const products = DB.getProducts(TYPE);
-
   let body = `<div style="background:var(--bg3);padding:12px 14px;border-radius:10px;margin-bottom:16px;font-size:14px">
     <span style="color:var(--text2);font-size:12px">Mijoz:</span>
     <strong style="margin-left:6px">${c.name}</strong>
-  </div>`;
-
-  if (isPostoyanniy) {
-    body += `<div class="input-group" style="margin-bottom:14px">
-      <label><i class="fa-solid fa-money-bill-wave"></i> Qarz summasi (so'm)</label>
-      <input type="number" id="debtAmount" placeholder="100000" min="1">
-    </div>`;
-  } else {
-    const opts = products.map(p => `<option>${p.name}</option>`).join('');
-    body += `
-      <div class="input-group" style="margin-bottom:14px">
-        <label><i class="fa-solid fa-drumstick-bite"></i> Go'sht turi</label>
-        <select id="debtMeat">
-          <option value="">— tanlang —</option>${opts}
-        </select>
-      </div>
-      <div class="form-row" style="margin-bottom:14px">
-        <div class="input-group">
-          <label><i class="fa-solid fa-money-bill-wave"></i> Narxi (so'm/kg)</label>
-          <input type="number" id="debtPrice" placeholder="30000" min="1" oninput="calcDebt()">
-        </div>
-        <div class="input-group">
-          <label><i class="fa-solid fa-weight-scale"></i> Miqdor (kg)</label>
-          <input type="number" id="debtKg" placeholder="0.0" step="0.5" min="0.1" oninput="calcDebt()">
-        </div>
-      </div>
-      <div class="calc-result" id="debtCalc" style="display:none;margin-bottom:14px">
-        <span class="label"><i class="fa-solid fa-calculator"></i> Jami summa:</span>
-        <span class="amount" id="debtCalcAmt"></span>
-      </div>`;
-  }
-
-  body += `<div class="input-group">
+  </div>
+  <div class="input-group" style="margin-bottom:14px">
+    <label><i class="fa-solid fa-money-bill-wave"></i> Qarz summasi (so'm)</label>
+    <input type="number" id="debtAmount" placeholder="100000" min="1">
+  </div>
+  <div class="input-group">
     <label><i class="fa-solid fa-pen-to-square"></i> Izoh (ixtiyoriy)</label>
     <input type="text" id="debtNote" placeholder="">
   </div>`;
@@ -543,37 +512,11 @@ function openDebtModal(custId) {
   document.getElementById('debtModal').classList.add('show');
 }
 
-function calcDebt() {
-  const price = Number(document.getElementById('debtPrice')?.value);
-  const kg = Number(document.getElementById('debtKg')?.value);
-  const calc = document.getElementById('debtCalc');
-  if (price > 0 && kg > 0) {
-    calc.style.display = 'flex';
-    document.getElementById('debtCalcAmt').textContent = DB.fmt(price * kg) + " so'm";
-  } else if (calc) { calc.style.display = 'none'; }
-}
-
 function saveDebt() {
   const note = document.getElementById('debtNote')?.value || '';
-  let debtData;
-
-  if (TYPE === 'postoyanniy') {
-    const amount = Number(document.getElementById('debtAmount')?.value);
-    if (!amount || amount <= 0) { alert("Summa kiriting!"); return; }
-    debtData = { customerId: _debtCustId, customerName: _debtCustName, meatType: '', pricePerKg: amount, kg: 1, note };
-  } else {
-    const meatSel = document.getElementById('debtMeat');
-    const price = Number(document.getElementById('debtPrice')?.value);
-    const kg = Number(document.getElementById('debtKg')?.value);
-    if (!meatSel?.value) { alert("Go'sht turini tanlang!"); return; }
-    if (!price || price <= 0) { alert("Narxni kiriting!"); return; }
-    if (!kg || kg <= 0) { alert("Miqdorni kiriting!"); return; }
-    debtData = {
-      customerId: _debtCustId, customerName: _debtCustName,
-      meatType: meatSel.value,
-      pricePerKg: price, kg, note
-    };
-  }
+  const amount = Number(document.getElementById('debtAmount')?.value);
+  if (!amount || amount <= 0) { alert("Summa kiriting!"); return; }
+  const debtData = { customerId: _debtCustId, customerName: _debtCustName, meatType: '', pricePerKg: amount, kg: 1, note };
 
   const debt = DB.addDebt(TYPE, debtData);
   TG.notifyDebt(DB.getTypeName(TYPE), debt.customerName, debt.meatType, debt.kg, debt.total);
