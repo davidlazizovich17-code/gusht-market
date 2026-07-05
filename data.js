@@ -140,6 +140,23 @@ const DB = {
     this.saveDebts(type, this.getDebts(type).filter(d => d.id !== id));
   },
 
+  writeOffCustomerDebt(type, customerId, amount) {
+    let debts = this.getDebts(type);
+    const active = debts
+      .filter(d => d.customerId === customerId && d.remaining > 0)
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    let left = Math.max(0, Number(amount));
+    for (const debt of active) {
+      if (left <= 0) break;
+      const cut = Math.min(left, debt.remaining);
+      debt.remaining -= cut;
+      debt.total = debt.paid + debt.remaining;
+      left -= cut;
+    }
+    debts = debts.filter(d => d.remaining > 0 || d.customerId !== customerId);
+    this.saveDebts(type, debts);
+  },
+
   writeOffDebt(type, debtId, amount) {
     const debts = this.getDebts(type);
     const debt = debts.find(d => d.id === debtId);
@@ -284,9 +301,6 @@ const DB = {
       ['debts', 'fa-receipt', 'Qarzlar', `debts.html${t}`],
       ['customers', 'fa-users', 'Mijozlar', `customers.html${t}`],
     ];
-    const catalogItems = [
-      ['products', 'fa-drumstick-bite', "Go'sht turlari", `products.html${t}`],
-    ];
     const reportItems = [
       ['today', 'fa-calendar-day', 'Bugungi', `today.html${t}`],
       ['blacklist', 'fa-ban', "Qora ro'yxat", `blacklist.html${t}`],
@@ -304,8 +318,6 @@ const DB = {
       <nav class="sidebar-nav">
         <div class="nav-section">Asosiy</div>
         ${navItems.map(item).join('')}
-        <div class="nav-section">Katalog</div>
-        ${catalogItems.map(item).join('')}
         <div class="nav-section">Hisobot</div>
         ${reportItems.map(item).join('')}
       </nav>

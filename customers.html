@@ -526,46 +526,60 @@ function saveDebt() {
 }
 
 // ─── Remove / WriteOff Debt ───────────────────────────────────────────────
+let _removeCustomerId = '';
+
 function openRemoveModal(custId) {
   const c = DB.getCustomers(TYPE).find(x => x.id === custId);
-  const custName = c ? c.name : '';
-  const debts = DB.getDebts(TYPE).filter(d => d.customerId === custId && d.status !== 'paid');
-  let body = `<p style="margin-bottom:14px;color:var(--text2);font-size:13px">
-    <strong style="color:var(--text)">${custName}</strong> — qarz kamaytirish:
-  </p>`;
+  if (!c) return;
+  _removeCustomerId = custId;
+  const debts = DB.getDebts(TYPE).filter(d => d.customerId === custId && d.remaining > 0);
+  const totalDebt = debts.reduce((s, d) => s + d.remaining, 0);
+
+  let body = `<div style="margin-bottom:16px">
+    <div style="font-size:13px;color:var(--text2);margin-bottom:4px">Mijoz:</div>
+    <div style="font-weight:700;font-size:16px">${c.name}</div>
+  </div>`;
+
   if (!debts.length) {
     body += `<div style="text-align:center;color:var(--green);padding:20px"><i class="fa-solid fa-check"></i> Faol qarz yo'q</div>`;
   } else {
-    body += debts.map(d => {
+    const debtLines = debts.map(d => {
       const isOverdue = DB.debtStatus(d) === 'overdue';
-      return `
-      <div class="cust-debt-row" style="margin-bottom:12px;flex-direction:column;align-items:stretch;gap:8px;${isOverdue?'border-left:3px solid var(--overdue);padding-left:10px':''}">
-        <div style="display:flex;justify-content:space-between;align-items:center">
-          <div>
-            <div style="font-weight:600;color:${isOverdue?'var(--overdue)':'var(--text)'}">#${d.num} — ${DB.fmt(d.remaining)} so'm</div>
-            <div style="font-size:12px;color:var(--text2)">${DB.fmtDate(d.createdAt)}${d.meatType?' • '+d.meatType+' '+d.kg+'kg':''}${isOverdue?' • <span style="color:var(--overdue)">2+ oy</span>':''}</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:8px;align-items:center">
-          <input type="number" id="wo-${d.id}" placeholder="Kamaytirish summasi" min="1" max="${d.remaining}"
-            style="flex:1;padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:14px;outline:none">
-          <button class="btn btn-sm btn-danger" onclick="doWriteOff('${d.id}', ${d.remaining})">
-            <i class="fa-solid fa-scissors"></i> Kamaytir
-          </button>
-        </div>
+      return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <span style="color:var(--text2)">#${d.num} — ${DB.fmtDate(d.createdAt)}</span>
+        <span style="font-weight:600;color:${isOverdue?'var(--overdue)':'var(--text)'}">${DB.fmt(d.remaining)} so'm${isOverdue?' ⏰':''}</span>
       </div>`;
     }).join('');
+
+    body += `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:10px;padding:10px 14px">
+      ${debtLines}
+      <div style="display:flex;justify-content:space-between;padding-top:8px;font-weight:700">
+        <span>Jami qarz:</span>
+        <span style="color:var(--red-light)">${DB.fmt(totalDebt)} so'm</span>
+      </div>
+    </div>
+    <div class="input-group">
+      <label><i class="fa-solid fa-scissors"></i> Qancha kamaytirish? (so'm)</label>
+      <input type="number" id="woAmount" placeholder="Summa kiriting" min="1" max="${totalDebt}"
+        style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:15px;outline:none;width:100%"
+        onkeydown="if(event.key==='Enter')doWriteOff()">
+    </div>`;
   }
+
   document.getElementById('removeModalBody').innerHTML = body;
   document.getElementById('removeModal').classList.add('show');
+  setTimeout(() => document.getElementById('woAmount')?.focus(), 100);
 }
 
-function doWriteOff(debtId, maxAmount) {
-  const input = document.getElementById('wo-' + debtId);
+function doWriteOff() {
+  const input = document.getElementById('woAmount');
   const amount = Number(input ? input.value : 0);
   if (!amount || amount <= 0) { alert("Summa kiriting!"); return; }
-  if (amount > maxAmount) { alert(`Maksimal summa: ${DB.fmt(maxAmount)} so'm`); return; }
-  DB.writeOffDebt(TYPE, debtId, amount);
+  const totalDebt = DB.getDebts(TYPE)
+    .filter(d => d.customerId === _removeCustomerId && d.remaining > 0)
+    .reduce((s, d) => s + d.remaining, 0);
+  if (amount > totalDebt) { alert(`Maksimal: ${DB.fmt(totalDebt)} so'm`); return; }
+  DB.writeOffCustomerDebt(TYPE, _removeCustomerId, amount);
   closeModal('removeModal');
   renderList();
 }
