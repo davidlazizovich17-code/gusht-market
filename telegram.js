@@ -2,7 +2,7 @@
 
 const TG = {
   TOKEN: '8602981625:AAE0Q0BBMhFaL3ZpgFHXqJy8uGOlKVav2NQ',
-  CHAT_ID: '7136325654',
+  CHAT_ID: '1409197672',
   API: 'https://api.telegram.org/bot',
   _lastId: 0,
   _polling: null,

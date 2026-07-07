@@ -193,13 +193,11 @@ const DB = {
     const p = { id: this.generateId(), debtId, customerId: debt.customerId, customerName: debt.customerName, amount: actual, debtNum: debt.num, createdAt: new Date().toISOString() };
     payments.push(p);
     if (debt.remaining <= 0) {
-      // Qarz to'liq uzildi — barcha tarix o'chiriladi
       this.saveDebts(type, debts.filter(d => d.id !== debtId));
-      this.savePayments(type, payments.filter(pay => pay.debtId !== debtId));
     } else {
       this.saveDebts(type, debts);
-      this.savePayments(type, payments);
     }
+    this.savePayments(type, payments);
     return p;
   },
 
