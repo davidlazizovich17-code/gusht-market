@@ -566,46 +566,55 @@ function openRemoveModal(custId) {
     <div style="font-weight:700;font-size:16px">${c.name}</div>
   </div>`;
 
-  if (!debts.length) {
+  if (!debts.length && !DB.getPayments(TYPE).filter(p => p.customerId === custId).length) {
     body += `<div style="text-align:center;color:var(--green);padding:20px"><i class="fa-solid fa-check"></i> Faol qarz yo'q</div>`;
   } else {
-    const debtLines = debts.map(d => {
-      const isOverdue = DB.debtStatus(d) === 'overdue';
-      return `<div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);font-size:13px">
-        <span style="color:var(--text2)">#${d.num} — ${DB.fmtDate(d.createdAt)}</span>
-        <span style="font-weight:600;color:${isOverdue?'var(--overdue)':'var(--text)'}">${DB.fmt(d.remaining)} so'm${isOverdue?' ⏰':''}</span>
-      </div>`;
+    // Qarz va to'lovlarni bitta tarixga birlashtir, vaqt bo'yicha tartiblash
+    const allDebts = DB.getDebts(TYPE).filter(d => d.customerId === custId && d.remaining > 0);
+    const allPayments = DB.getPayments(TYPE).filter(p => p.customerId === custId);
+
+    const events = [
+      ...allDebts.map(d => ({ type: 'debt', date: d.createdAt, num: d.num, amount: d.remaining, overdue: DB.debtStatus(d) === 'overdue', note: d.note })),
+      ...allPayments.map(p => ({ type: 'pay', date: p.createdAt, num: p.debtNum, amount: p.amount }))
+    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+
+    const eventRows = events.map(e => {
+      if (e.type === 'debt') {
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <div>
+            <span style="color:var(--red-light);font-weight:600"><i class="fa-solid fa-arrow-up" style="font-size:10px"></i> Qo'shildi</span>
+            <span style="color:var(--text2);margin-left:8px">#${e.num} • ${DB.fmtDate(e.date)}</span>
+            ${e.note ? `<div style="font-size:11px;color:var(--text2)">${e.note}</div>` : ''}
+          </div>
+          <span style="font-weight:700;color:${e.overdue?'var(--overdue)':'var(--red-light)'}">−${DB.fmt(e.amount)} so'm${e.overdue?' ⏰':''}</span>
+        </div>`;
+      } else {
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <div>
+            <span style="color:var(--green);font-weight:600"><i class="fa-solid fa-arrow-down" style="font-size:10px"></i> To'landi</span>
+            <span style="color:var(--text2);margin-left:8px">${DB.fmtDate(e.date)} • ${DB.fmtTime(e.date)}</span>
+          </div>
+          <span style="font-weight:700;color:var(--green)">+${DB.fmt(e.amount)} so'm</span>
+        </div>`;
+      }
     }).join('');
 
-    const custPayments = DB.getPayments(TYPE)
-      .filter(p => p.customerId === custId)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
-      .slice(0, 10);
-
-    const paySection = custPayments.length ? `
-      <div style="margin-bottom:16px;border:1px solid var(--border);border-radius:10px;padding:10px 14px">
-        <div style="font-size:11px;font-weight:700;color:var(--text2);letter-spacing:1px;margin-bottom:8px">TO'LOVLAR TARIXI</div>
-        ${custPayments.map(p => `
-          <div style="display:flex;justify-content:space-between;font-size:13px;padding:5px 0;border-bottom:1px solid var(--border)">
-            <span style="color:var(--text2)">${DB.fmtDate(p.createdAt)} • ${DB.fmtTime(p.createdAt)}</span>
-            <span style="color:var(--green);font-weight:700">+ ${DB.fmt(p.amount)} so'm</span>
-          </div>`).join('')}
-      </div>` : '';
-
-    body += `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:10px;padding:10px 14px">
-      ${debtLines}
-      <div style="display:flex;justify-content:space-between;padding-top:8px;font-weight:700">
+    body += `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:10px;padding:10px 14px;max-height:280px;overflow-y:auto">
+      ${eventRows}
+      ${totalDebt > 0 ? `<div style="display:flex;justify-content:space-between;padding-top:10px;font-weight:700;font-size:14px">
         <span>Jami qarz:</span>
         <span style="color:var(--red-light)">${DB.fmt(totalDebt)} so'm</span>
-      </div>
-    </div>
-    ${paySection}
-    <div class="input-group">
-      <label><i class="fa-solid fa-scissors"></i> Qancha kamaytirish? (so'm)</label>
-      <input type="number" id="woAmount" placeholder="Summa kiriting" min="1" max="${totalDebt}"
-        style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:15px;outline:none;width:100%"
-        onkeydown="if(event.key==='Enter')doWriteOff()">
+      </div>` : ''}
     </div>`;
+
+    if (totalDebt > 0) {
+      body += `<div class="input-group">
+        <label><i class="fa-solid fa-scissors"></i> Qancha kamaytirish? (so'm)</label>
+        <input type="number" id="woAmount" placeholder="Summa kiriting" min="1" max="${totalDebt}"
+          style="padding:10px 14px;border:1px solid var(--border);border-radius:8px;background:var(--bg2);color:var(--text);font-size:15px;outline:none;width:100%"
+          onkeydown="if(event.key==='Enter')doWriteOff()">
+      </div>`;
+    }
   }
 
   document.getElementById('removeModalBody').innerHTML = body;
