@@ -630,7 +630,13 @@ function doWriteOff() {
     .filter(d => d.customerId === _removeCustomerId && d.remaining > 0)
     .reduce((s, d) => s + d.remaining, 0);
   if (amount > totalDebt) { alert(`Maksimal: ${DB.fmt(totalDebt)} so'm`); return; }
+  const cust = DB.getCustomers(TYPE).find(c => c.id === _removeCustomerId);
   DB.writeOffCustomerDebt(TYPE, _removeCustomerId, amount);
+  // To'lovlar tarixiga yozib qo'yish (To'landi bo'limida chiqishi uchun)
+  const payments = DB.getPayments(TYPE);
+  payments.push({ id: DB.generateId(), debtId: null, customerId: _removeCustomerId, customerName: cust ? cust.name : '', amount, debtNum: null, createdAt: new Date().toISOString() });
+  DB.savePayments(TYPE, payments);
+  TG.notifyPayment(DB.getTypeName(TYPE), cust ? cust.name : '', amount);
   closeModal('removeModal');
   renderList();
 }
