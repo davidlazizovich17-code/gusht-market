@@ -51,6 +51,7 @@ const DB = {
   getType() {
     const t = new URLSearchParams(location.search).get('type');
     if (!t || !this.TYPES.includes(t)) { location.href = 'select.html'; return null; }
+    this._currentType = t;
     return t;
   },
 
@@ -297,9 +298,25 @@ const DB = {
     return (Date.now() - new Date(dateStr).getTime()) > 60 * 24 * 60 * 60 * 1000;
   },
 
-  debtStatus(debt) {
+  lastPaymentDate(type, customerId) {
+    const pays = this.getPayments(type).filter(p => p.customerId === customerId);
+    if (!pays.length) return null;
+    return pays.reduce((m, p) => (p.createdAt > m ? p.createdAt : m), pays[0].createdAt);
+  },
+
+  // Qarz "qizil" (2+ oy) bo'ladi: qarz yozilganiga 2 oydan oshgan VA mijoz
+  // oxirgi 2 oy ichida umuman to'lov (minus) qilmagan bo'lsa. Qandaydir summa
+  // to'langan bo'lsa — 2 oylik muddat qayta boshlanadi, qizilga tushmaydi.
+  isDebtOverdue(debt, type) {
+    const t = type || this._currentType;
+    if (!this.isOverdue(debt.createdAt)) return false;
+    const lastPay = t ? this.lastPaymentDate(t, debt.customerId) : null;
+    return !(lastPay && !this.isOverdue(lastPay));
+  },
+
+  debtStatus(debt, type) {
     if (debt.status === 'paid') return 'paid';
-    if (this.isOverdue(debt.createdAt)) return 'overdue';
+    if (this.isDebtOverdue(debt, type)) return 'overdue';
     return 'unpaid';
   },
 
@@ -313,7 +330,7 @@ const DB = {
       totalCustomers: customers.filter(c => !c.blocked).length,
       totalDebt: active.reduce((s, d) => s + d.remaining, 0),
       todayPaymentTotal: payments.filter(p => new Date(p.createdAt).toDateString() === today).reduce((s, p) => s + p.amount, 0),
-      overdueCount: active.filter(d => this.isOverdue(d.createdAt)).length,
+      overdueCount: active.filter(d => this.isDebtOverdue(d, type)).length,
       blockedCount: customers.filter(c => c.blocked).length
     };
   },

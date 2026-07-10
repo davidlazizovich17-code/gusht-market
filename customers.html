@@ -383,7 +383,7 @@ function renderList() {
 function buildCustCard(c) {
   const debt = DB.getCustomerDebt(TYPE, c.id);
   const activeDebts = DB.getDebts(TYPE).filter(d => d.customerId === c.id && d.status !== 'paid');
-  const hasOverdue = activeDebts.some(d => DB.isOverdue(d.createdAt));
+  const hasOverdue = activeDebts.some(d => DB.isDebtOverdue(d));
 
   let cardClass = '';
   if (c.blocked) cardClass = '';
@@ -583,17 +583,20 @@ function openRemoveModal(custId) {
     <div style="font-weight:700;font-size:16px">${c.name}</div>
   </div>`;
 
-  if (!debts.length && !DB.getPayments(TYPE).filter(p => p.customerId === custId).length) {
+  const custHistory = DB.getCustomerHistory(TYPE, custId);
+  if (!debts.length && !custHistory.length) {
     body += `<div style="text-align:center;color:var(--green);padding:20px"><i class="fa-solid fa-check"></i> Faol qarz yo'q</div>`;
   } else {
-    // Qarz va to'lovlarni bitta tarixga birlashtir, vaqt bo'yicha tartiblash
-    const allDebts = DB.getDebts(TYPE).filter(d => d.customerId === custId && d.remaining > 0);
-    const allPayments = DB.getPayments(TYPE).filter(p => p.customerId === custId);
-
-    const events = [
-      ...allDebts.map(d => ({ type: 'debt', date: d.createdAt, num: d.num, amount: d.remaining, overdue: DB.debtStatus(d) === 'overdue', note: d.note })),
-      ...allPayments.map(p => ({ type: 'pay', date: p.createdAt, num: p.debtNum, amount: p.amount }))
-    ].sort((a, b) => new Date(b.date) - new Date(a.date));
+    // O'chirilmas tarixdan quramiz — qarz to'liq yopilsa ham ro'yxatdan yo'qolmaydi
+    const activeNums = new Set(debts.map(d => d.num));
+    const events = custHistory.map(h => ({
+      type: h.kind === 'debt' ? 'debt' : 'pay',
+      date: h.createdAt,
+      num: h.debtNum,
+      amount: h.amount,
+      overdue: h.kind === 'debt' && activeNums.has(h.debtNum) && DB.isOverdue(h.createdAt),
+      note: h.note
+    })).sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const eventRows = events.map(e => {
       if (e.type === 'debt') {

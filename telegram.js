@@ -61,8 +61,10 @@ const TG = {
 
   // ─── Bot buyruqlari ──────────────────────────────────────────────────────
   async handleMessage(msg) {
-    if (!msg || !msg.text) return;
-    if (String(msg.chat.id) !== this.CHAT_ID) return;
+    if (!msg) return;
+    // Egadan boshqa har kim — mijoz sifatida qaraladi
+    if (String(msg.chat.id) !== this.CHAT_ID) { await this._handleCustomer(msg); return; }
+    if (!msg.text) return;
     const cmd = msg.text.split(' ')[0].toLowerCase();
 
     const TYPES = { postoyanniy: 'Постоянный', optom: 'Оптомний', klient: 'Клиент' };
@@ -232,6 +234,112 @@ Misol:
 ✅ Bugungi to'lovlar: ${Number(s.todayPaymentTotal).toLocaleString('uz-UZ')} so'm
 📝 Bugun yozilgan: ${todayDebts.length} ta qarz`
     );
+  },
+
+  // ─── Mijozlar uchun bot (ro'yxatdan o'tish + o'z qarzini ko'rish) ─────────
+  // Mijoz botga do'konda saqlangan telefon raqamini yuboradi — mos kelsa
+  // ro'yxatdan o'tadi va istalgan payt qarz holatini so'ray oladi.
+  _getLinks() { return DB.get('bot', 'links') || {}; },
+  _saveLinks(l) { DB.set('bot', 'links', l); },
+
+  _normPhone(p) {
+    // Solishtirish uchun raqamning oxirgi 9 xonasi olinadi (+998 siz)
+    return String(p || '').replace(/\D/g, '').slice(-9);
+  },
+
+  _findCustomersByPhone(phone) {
+    const norm = this._normPhone(phone);
+    if (norm.length < 7) return [];
+    const found = [];
+    ['postoyanniy', 'optom', 'klient'].forEach(t => {
+      DB.getCustomers(t).forEach(c => {
+        if (this._normPhone(c.phone) === norm) found.push({ type: t, customer: c });
+      });
+    });
+    return found;
+  },
+
+  async sendTo(chatId, text) {
+    try {
+      const res = await fetch(`${this.API}${this.TOKEN}/sendMessage`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chat_id: chatId, text, parse_mode: 'HTML' })
+      });
+      return await res.json();
+    } catch (e) { console.warn('TG sendTo error:', e.message); }
+  },
+
+  async _handleCustomer(msg) {
+    const chatId = String(msg.chat.id);
+    const links = this._getLinks();
+    const link = links[chatId];
+    const text = (msg.text || '').trim();
+    const contactPhone = msg.contact && msg.contact.phone_number;
+
+    // Telefon raqam yuborilgan bo'lsa — ro'yxatdan o'tkazamiz
+    const cleaned = text.replace(/[\s\-()]/g, '');
+    const phoneLike = contactPhone || (/^\+?\d{7,15}$/.test(cleaned) ? cleaned : null);
+    if (phoneLike) {
+      const found = this._findCustomersByPhone(phoneLike);
+      if (!found.length) {
+        await this.sendTo(chatId,
+`❌ Bu raqam bizning bazada topilmadi.
+
+Do'konda saqlangan raqamingizni yuboring.
+Masalan: <code>+998901234567</code>`);
+        return;
+      }
+      links[chatId] = { phone: this._normPhone(phoneLike), name: found[0].customer.name, date: new Date().toISOString() };
+      this._saveLinks(links);
+      await this.sendTo(chatId, `✅ Ro'yxatdan o'tdingiz, <b>${found[0].customer.name}</b>!`);
+      await this._sendCustomerDebts(chatId, links[chatId].phone);
+      return;
+    }
+
+    if (!link) {
+      await this.sendTo(chatId,
+`👋 <b>Go'sht Market</b>
+
+Qarz holatingizni ko'rish uchun do'konda saqlangan telefon raqamingizni yuboring.
+Masalan: <code>+998901234567</code>`);
+      return;
+    }
+
+    // Ro'yxatdan o'tgan mijoz — istalgan xabarga qarz holatini qaytaramiz
+    await this._sendCustomerDebts(chatId, link.phone);
+  },
+
+  async _sendCustomerDebts(chatId, phone) {
+    const found = this._findCustomersByPhone(phone);
+    if (!found.length) {
+      await this.sendTo(chatId, `❌ Ma'lumot topilmadi. Raqamingizni qayta yuboring.`);
+      return;
+    }
+    const TYPES = { postoyanniy: 'Постоянный', optom: 'Оптом', klient: 'Клиент' };
+    let total = 0;
+    const parts = [];
+    found.forEach(({ type, customer }) => {
+      const debts = DB.getDebts(type).filter(d => d.customerId === customer.id && d.status !== 'paid' && d.remaining > 0);
+      if (!debts.length) return;
+      const lines = debts.map(d => `  • ${DB.fmtDate(d.createdAt)} — <b>${Number(d.remaining).toLocaleString('uz-UZ')} so'm</b>`);
+      const sum = debts.reduce((s, d) => s + d.remaining, 0);
+      total += sum;
+      parts.push(`📂 <b>${TYPES[type]}</b>\n${lines.join('\n')}`);
+    });
+
+    if (!parts.length) {
+      await this.sendTo(chatId, `✅ <b>${found[0].customer.name}</b>, sizda hozir qarz yo'q!`);
+      return;
+    }
+    await this.sendTo(chatId,
+`👤 <b>${found[0].customer.name}</b>
+
+${parts.join('\n\n')}
+
+━━━━━━━━━━━━━━
+💰 Umumiy qarz: <b>${Number(total).toLocaleString('uz-UZ')} so'm</b>
+📅 ${new Date().toLocaleDateString('uz-UZ')}`);
   },
 
   // ─── Polling ─────────────────────────────────────────────────────────────

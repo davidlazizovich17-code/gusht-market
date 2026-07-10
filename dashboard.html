@@ -20,6 +20,9 @@
         <span>Dashboard</span>
       </div>
       <div class="topbar-right">
+        <button class="btn btn-sm btn-danger" id="overdueToggleBtn" onclick="toggleOverdue()">
+          <i class="fa-solid fa-triangle-exclamation"></i> 2+ oy qarzlar
+        </button>
         <span class="topbar-date" id="dateDisplay"></span>
       </div>
     </div>
@@ -234,7 +237,22 @@ function renderList() {
   renderOverdueBox();
 }
 
+// 2+ oy qarzlar bo'limi — tugma bosilgandagina ko'rinadi
+let _showOverdue = false;
+
+function toggleOverdue() {
+  _showOverdue = !_showOverdue;
+  renderOverdueBox();
+  const btn = document.getElementById('overdueToggleBtn');
+  btn.innerHTML = _showOverdue
+    ? `<i class="fa-solid fa-eye-slash"></i> 2+ oy qarzlarni yashirish`
+    : `<i class="fa-solid fa-triangle-exclamation"></i> 2+ oy qarzlar`;
+  if (_showOverdue) document.getElementById('overdueBox').scrollIntoView({ behavior: 'smooth' });
+}
+
 function renderOverdueBox() {
+  const box0 = document.getElementById('overdueBox');
+  if (!_showOverdue) { box0.innerHTML = ''; return; }
   const all = DB.getCustomers(TYPE).filter(c => !c.blocked);
   const overdue = all.filter(c =>
     DB.getDebts(TYPE).some(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue')
@@ -245,7 +263,12 @@ function renderOverdueBox() {
   }));
 
   const box = document.getElementById('overdueBox');
-  if (!overdue.length) { box.innerHTML = ''; return; }
+  if (!overdue.length) {
+    box.innerHTML = `<div class="card" style="margin-bottom:20px"><div class="card-body" style="text-align:center;color:var(--green);padding:20px">
+      <i class="fa-solid fa-check"></i> 2+ oy muddati o'tgan qarzlar yo'q
+    </div></div>`;
+    return;
+  }
 
   const rows = overdue.map(c => `
     <tr>
@@ -267,7 +290,7 @@ function renderOverdueBox() {
         2+ oy muddati o'tgan &nbsp;<span style="font-weight:400;font-size:13px">(${overdue.length} ta)</span>
       </div>
       <button class="btn btn-sm btn-danger" onclick="printAllOverdue()">
-        <i class="fa-solid fa-print"></i> Hammasini chop etish
+        <i class="fa-brands fa-telegram"></i> Hammasini botga PDF yuborish
       </button>
     </div>
     <div class="card-body">
@@ -357,7 +380,7 @@ function printAllOverdue() {
 function buildCustCard(c) {
   const debt = DB.getCustomerDebt(TYPE, c.id);
   const activeDebts = DB.getDebts(TYPE).filter(d => d.customerId === c.id && d.status !== 'paid');
-  const hasOverdue = activeDebts.some(d => DB.isOverdue(d.createdAt));
+  const hasOverdue = activeDebts.some(d => DB.isDebtOverdue(d));
   let cardClass = debt > 0 ? (hasOverdue ? 'has-overdue' : 'has-debt') : '';
 
   const debtRows = activeDebts.length ? activeDebts.map(d => `
@@ -367,7 +390,7 @@ function buildCustCard(c) {
         ${d.meatType ? `<span class="meat-tag" style="margin-left:6px;font-size:11px"><i class="fa-solid fa-drumstick-bite"></i> ${d.meatType} ${d.kg}kg</span>` : ''}
       </div>
       <div style="text-align:right">
-        <div style="font-weight:700;color:${DB.isOverdue(d.createdAt)?'var(--overdue)':'var(--red-light)'}">
+        <div style="font-weight:700;color:${DB.isDebtOverdue(d)?'var(--overdue)':'var(--red-light)'}">
           ${DB.fmt(d.remaining)} so'm
         </div>
         ${DB.statusBadge(DB.debtStatus(d))}
