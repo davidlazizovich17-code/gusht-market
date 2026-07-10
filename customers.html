@@ -157,6 +157,21 @@
   </div>
 </div>
 
+<!-- HISTORY MODAL -->
+<div class="modal-overlay" id="historyModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> Pul tarixi</div>
+      <button class="modal-close" onclick="closeModal('historyModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="historyModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="clearHistory()"><i class="fa-solid fa-trash"></i> Tarixni o'chirish</button>
+      <button class="btn btn-ghost" onclick="closeModal('historyModal')">Yopish</button>
+    </div>
+  </div>
+</div>
+
 <!-- DELETE CUSTOMER MODAL -->
 <div class="modal-overlay" id="deleteCustomerModal">
   <div class="modal" style="max-width:400px">
@@ -186,6 +201,7 @@
 <script src="supabase.js"></script>
 <script src="data.js"></script>
 <script src="telegram.js"></script>
+<script src="report.js"></script>
 <script src="camera.js"></script>
 <script>
 DB.checkLogin();
@@ -428,6 +444,7 @@ function buildCustCard(c) {
           ` : `
             <button class="btn btn-sm btn-unblock" onclick="unblock('${c.id}')"><i class="fa-solid fa-lock-open"></i> Chiqar</button>
           `}
+          <button class="btn btn-sm btn-ghost" style="padding:4px 8px" title="Pul tarixi" onclick="openHistoryModal('${c.id}')"><i class="fa-solid fa-clock-rotate-left"></i></button>
           <button class="btn btn-sm btn-ghost" style="padding:4px 8px" onclick="openEditModal('${c.id}')"><i class="fa-solid fa-pen-to-square"></i></button>
           ${!c.blocked ? `<button class="btn-minus" style="font-size:14px" title="Blok" onclick="openBlockModal('${c.id}')"><i class="fa-solid fa-ban"></i></button>` : ''}
           <button class="btn btn-sm btn-danger" style="padding:4px 8px" title="Mijozni o'chirish" onclick="openDeleteCustomerModal('${c.id}')"><i class="fa-solid fa-trash"></i></button>
@@ -636,9 +653,30 @@ function doWriteOff() {
   const payments = DB.getPayments(TYPE);
   payments.push({ id: DB.generateId(), debtId: null, customerId: _removeCustomerId, customerName: cust ? cust.name : '', amount, debtNum: null, createdAt: new Date().toISOString() });
   DB.savePayments(TYPE, payments);
+  DB.logHistory(TYPE, { customerId: _removeCustomerId, customerName: cust ? cust.name : '', kind: 'payment', amount, note: 'Qarz kamaytirildi' });
   TG.notifyPayment(DB.getTypeName(TYPE), cust ? cust.name : '', amount);
   closeModal('removeModal');
   renderList();
+}
+
+// ─── History (pul tarixi) ─────────────────────────────────────────────────
+let _histCustId = '';
+
+function openHistoryModal(custId) {
+  _histCustId = custId;
+  const c = DB.getCustomers(TYPE).find(x => x.id === custId);
+  document.getElementById('historyModalBody').innerHTML =
+    DB.buildHistoryHTML(TYPE, custId, c ? c.name : '');
+  document.getElementById('historyModal').classList.add('show');
+}
+
+function clearHistory() {
+  if (!DB.getCustomerHistory(TYPE, _histCustId).length) { alert("Tarix allaqachon bo'sh!"); return; }
+  const pass = prompt("Tarixni butunlay o'chirish uchun parol kiriting:");
+  if (pass === null) return;
+  if (pass !== '12345') { alert("Parol noto'g'ri!"); return; }
+  DB.clearCustomerHistory(TYPE, _histCustId);
+  openHistoryModal(_histCustId);
 }
 
 // ─── Delete Customer ──────────────────────────────────────────────────────

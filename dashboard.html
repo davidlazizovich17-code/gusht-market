@@ -119,6 +119,21 @@
   </div>
 </div>
 
+<!-- HISTORY MODAL -->
+<div class="modal-overlay" id="historyModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> Pul tarixi</div>
+      <button class="modal-close" onclick="closeModal('historyModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="historyModalBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-danger btn-sm" onclick="clearHistory()"><i class="fa-solid fa-trash"></i> Tarixni o'chirish</button>
+      <button class="btn btn-ghost" onclick="closeModal('historyModal')">Yopish</button>
+    </div>
+  </div>
+</div>
+
 <!-- REMOVE DEBT MODAL -->
 <div class="modal-overlay" id="removeModal">
   <div class="modal">
@@ -136,6 +151,7 @@
 <script src="supabase.js"></script>
 <script src="data.js"></script>
 <script src="telegram.js"></script>
+<script src="report.js"></script>
 <script src="camera.js"></script>
 <script>
 DB.checkLogin();
@@ -371,6 +387,7 @@ function buildCustCard(c) {
         <div class="cust-btns" onclick="event.stopPropagation()">
           <button class="btn-plus" title="Qarz yozish" onclick="openDebtModal('${c.id}')">+</button>
           <button class="btn-minus" title="Qarz o'chirish" onclick="openRemoveModal('${c.id}')">−</button>
+          <button class="btn btn-sm btn-ghost" style="padding:4px 8px" title="Pul tarixi" onclick="openHistoryModal('${c.id}')"><i class="fa-solid fa-clock-rotate-left"></i></button>
         </div>
         <i class="fa-solid fa-chevron-down cust-caret" id="caret-${c.id}"></i>
       </div>
@@ -423,6 +440,26 @@ function saveDebt() {
   closeModal('debtModal');
   renderList();
   loadStats();
+}
+
+// ─── History (pul tarixi) ─────────────────────────────────────────────────
+let _histCustId = '';
+
+function openHistoryModal(custId) {
+  _histCustId = custId;
+  const c = DB.getCustomers(TYPE).find(x => x.id === custId);
+  document.getElementById('historyModalBody').innerHTML =
+    DB.buildHistoryHTML(TYPE, custId, c ? c.name : '');
+  document.getElementById('historyModal').classList.add('show');
+}
+
+function clearHistory() {
+  if (!DB.getCustomerHistory(TYPE, _histCustId).length) { alert("Tarix allaqachon bo'sh!"); return; }
+  const pass = prompt("Tarixni butunlay o'chirish uchun parol kiriting:");
+  if (pass === null) return;
+  if (pass !== '12345') { alert("Parol noto'g'ri!"); return; }
+  DB.clearCustomerHistory(TYPE, _histCustId);
+  openHistoryModal(_histCustId);
 }
 
 // ─── Remove Debt ──────────────────────────────────────────────────────────

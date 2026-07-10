@@ -128,12 +128,15 @@ const DB = {
   saveDebts(type, d) { this.set(type, 'debts', d); },
 
   addDebt(type, { customerId, customerName, meatType, pricePerKg, kg, note }) {
+    this.getHistory(type); // migratsiya yangi yozuvdan OLDIN bajarilsin
     const list = this.getDebts(type);
     const num = (this.get(type, 'counter') || 0) + 1;
     this.set(type, 'counter', num);
     const total = Math.round(pricePerKg * kg);
     const d = { id: this.generateId(), num, customerId, customerName, meatType, pricePerKg: Number(pricePerKg), kg: Number(kg), total, paid: 0, remaining: total, note: note || '', status: 'unpaid', createdAt: new Date().toISOString() };
-    list.push(d); this.saveDebts(type, list); return d;
+    list.push(d); this.saveDebts(type, list);
+    this.logHistory(type, { customerId, customerName, kind: 'debt', amount: total, note, debtNum: num });
+    return d;
   },
 
   deleteDebt(type, id) {
@@ -141,6 +144,7 @@ const DB = {
   },
 
   writeOffCustomerDebt(type, customerId, amount) {
+    this.getHistory(type); // migratsiya o'zgarishdan OLDIN bajarilsin
     let debts = this.getDebts(type);
     const active = debts
       .filter(d => d.customerId === customerId && d.remaining > 0)
@@ -158,6 +162,7 @@ const DB = {
   },
 
   writeOffDebt(type, debtId, amount) {
+    this.getHistory(type); // migratsiya o'zgarishdan OLDIN bajarilsin
     const debts = this.getDebts(type);
     const debt = debts.find(d => d.id === debtId);
     if (!debt) return 0;
@@ -184,6 +189,7 @@ const DB = {
   savePayments(type, d) { this.set(type, 'payments', d); },
 
   addPayment(type, debtId, amount) {
+    this.getHistory(type); // migratsiya yangi yozuvdan OLDIN bajarilsin
     const debts = this.getDebts(type);
     const debt = debts.find(d => d.id === debtId);
     if (!debt || debt.remaining <= 0) return null;
@@ -192,6 +198,7 @@ const DB = {
     const payments = this.getPayments(type);
     const p = { id: this.generateId(), debtId, customerId: debt.customerId, customerName: debt.customerName, amount: actual, debtNum: debt.num, createdAt: new Date().toISOString() };
     payments.push(p);
+    this.logHistory(type, { customerId: debt.customerId, customerName: debt.customerName, kind: 'payment', amount: actual, debtNum: debt.num });
     if (debt.remaining <= 0) {
       this.saveDebts(type, debts.filter(d => d.id !== debtId));
     } else {
@@ -199,6 +206,90 @@ const DB = {
     }
     this.savePayments(type, payments);
     return p;
+  },
+
+  // ─── History (o'chirilmas pul tarixi) ─────────────────────────────────────
+  // Har bir mijoz uchun berilgan qarz va olingan to'lovlarning to'liq tarixi.
+  // Qarz yoki mijoz o'chirilsa ham tarix qoladi — faqat clearCustomerHistory
+  // orqali qo'lda o'chiriladi.
+  getHistory(type) {
+    let list = this.get(type, 'history');
+    if (!list) {
+      // Birinchi ishga tushirishda mavjud qarz/to'lovlardan tarixni tiklaymiz
+      list = [
+        ...this.getDebts(type).map(d => ({ id: this.generateId(), customerId: d.customerId, customerName: d.customerName, kind: 'debt', amount: d.total, note: d.note || '', debtNum: d.num, createdAt: d.createdAt })),
+        ...this.getPayments(type).map(p => ({ id: this.generateId(), customerId: p.customerId, customerName: p.customerName, kind: 'payment', amount: p.amount, note: '', debtNum: p.debtNum || null, createdAt: p.createdAt }))
+      ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      this.set(type, 'history', list);
+    }
+    return list;
+  },
+
+  saveHistory(type, d) { this.set(type, 'history', d); },
+
+  logHistory(type, { customerId, customerName, kind, amount, note, debtNum }) {
+    const list = this.getHistory(type);
+    list.push({
+      id: this.generateId(), customerId, customerName,
+      kind, // 'debt' — pul berildi (qarz yozildi), 'payment' — pul olindi (to'lov)
+      amount: Number(amount), note: (note || '').trim(), debtNum: debtNum || null,
+      createdAt: new Date().toISOString()
+    });
+    this.saveHistory(type, list);
+  },
+
+  getCustomerHistory(type, customerId) {
+    return this.getHistory(type).filter(h => h.customerId === customerId);
+  },
+
+  clearCustomerHistory(type, customerId) {
+    this.saveHistory(type, this.getHistory(type).filter(h => h.customerId !== customerId));
+  },
+
+  buildHistoryHTML(type, customerId, customerName) {
+    const items = this.getCustomerHistory(type, customerId)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const given    = items.filter(h => h.kind === 'debt').reduce((s, h) => s + h.amount, 0);
+    const received = items.filter(h => h.kind === 'payment').reduce((s, h) => s + h.amount, 0);
+
+    const totals = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">
+        <div style="background:var(--bg3);border-radius:10px;padding:12px 14px">
+          <div style="font-size:11px;color:var(--text2);letter-spacing:1px">BERILGAN (QARZ)</div>
+          <div style="font-size:17px;font-weight:700;color:var(--red-light)">${this.fmt(given)} so'm</div>
+        </div>
+        <div style="background:var(--bg3);border-radius:10px;padding:12px 14px">
+          <div style="font-size:11px;color:var(--text2);letter-spacing:1px">OLINGAN (TO'LOV)</div>
+          <div style="font-size:17px;font-weight:700;color:var(--green)">${this.fmt(received)} so'm</div>
+        </div>
+      </div>`;
+
+    if (!items.length) {
+      return `<div style="margin-bottom:10px;font-weight:700;font-size:15px">${customerName || ''}</div>
+        ${totals}
+        <div style="text-align:center;color:var(--text2);padding:24px"><i class="fa-solid fa-clock-rotate-left"></i> Tarix bo'sh</div>`;
+    }
+
+    const rows = items.map(h => {
+      const isDebt = h.kind === 'debt';
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:8px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <div>
+          <span style="color:${isDebt ? 'var(--red-light)' : 'var(--green)'};font-weight:600">
+            <i class="fa-solid fa-arrow-${isDebt ? 'up' : 'down'}" style="font-size:10px"></i>
+            ${isDebt ? 'Pul berildi (qarz)' : "Pul olindi (to'lov)"}
+          </span>
+          <span style="color:var(--text2);margin-left:8px">${this.fmtDate(h.createdAt)} • ${this.fmtTime(h.createdAt)}${h.debtNum ? ' • #' + h.debtNum : ''}</span>
+          ${h.note ? `<div style="font-size:11px;color:var(--text2);margin-top:2px">${h.note}</div>` : ''}
+        </div>
+        <span style="font-weight:700;color:${isDebt ? 'var(--red-light)' : 'var(--green)'}">${isDebt ? '−' : '+'}${this.fmt(h.amount)} so'm</span>
+      </div>`;
+    }).join('');
+
+    return `<div style="margin-bottom:10px;font-weight:700;font-size:15px">${customerName || ''}
+        <span style="font-weight:400;font-size:12px;color:var(--text2)">(${items.length} ta yozuv)</span>
+      </div>
+      ${totals}
+      <div style="border:1px solid var(--border);border-radius:10px;padding:6px 14px;max-height:320px;overflow-y:auto">${rows}</div>`;
   },
 
   // ─── Computed ─────────────────────────────────────────────────────────────
@@ -240,6 +331,7 @@ const DB = {
         debts:     this.getDebts(t),
         payments:  this.getPayments(t),
         products:  this.getProducts(t),
+        history:   this.getHistory(t),
         counter:   this.get(t, 'counter') || 0
       };
     });
@@ -256,6 +348,7 @@ const DB = {
       if (data[t].debts)     this.saveDebts(t, data[t].debts);
       if (data[t].payments)  this.savePayments(t, data[t].payments);
       if (data[t].products)  this.saveProducts(t, data[t].products);
+      if (data[t].history)   this.saveHistory(t, data[t].history);
       if (data[t].counter)   this.set(t, 'counter', data[t].counter);
     });
     return true;
