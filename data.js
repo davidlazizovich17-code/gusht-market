@@ -7,16 +7,31 @@ const DB = {
 
   _key(type, key) { return `gm_${type}_${key}`; },
 
+  // Har o'qishda localStorage'ni JSON.parse qilmaslik uchun xotira keshi.
+  // Barcha yozuvlar set() dan o'tgani uchun kesh doim yangi bo'lib qoladi;
+  // localStorage tashqaridan o'zgarsa (Cloud.pull) clearCache() chaqiriladi.
+  _cache: {},
+  _payIdx: {},
+
   get(type, key) {
-    try { const r = localStorage.getItem(this._key(type, key)); return r ? JSON.parse(r) : null; }
-    catch { return null; }
+    const k = this._key(type, key);
+    if (k in this._cache) return this._cache[k];
+    let val = null;
+    try { const r = localStorage.getItem(k); val = r ? JSON.parse(r) : null; }
+    catch { val = null; }
+    this._cache[k] = val;
+    return val;
   },
 
   set(type, key, data) {
     const k = this._key(type, key);
+    this._cache[k] = data;
+    this._payIdx = {};
     localStorage.setItem(k, JSON.stringify(data));
     if (typeof Cloud !== 'undefined') Cloud.push(k, data);
   },
+
+  clearCache() { this._cache = {}; this._payIdx = {}; },
 
   // ─── Auth ─────────────────────────────────────────────────────────────
   checkLogin() {
@@ -298,10 +313,18 @@ const DB = {
     return (Date.now() - new Date(dateStr).getTime()) > 60 * 24 * 60 * 60 * 1000;
   },
 
+  // Mijoz bo'yicha oxirgi to'lov sanasi. Har qarz uchun to'lovlar ro'yxatini
+  // to'liq aylanib chiqmaslik uchun bir marta indeks quriladi.
   lastPaymentDate(type, customerId) {
-    const pays = this.getPayments(type).filter(p => p.customerId === customerId);
-    if (!pays.length) return null;
-    return pays.reduce((m, p) => (p.createdAt > m ? p.createdAt : m), pays[0].createdAt);
+    let idx = this._payIdx[type];
+    if (!idx) {
+      idx = {};
+      this.getPayments(type).forEach(p => {
+        if (!idx[p.customerId] || p.createdAt > idx[p.customerId]) idx[p.customerId] = p.createdAt;
+      });
+      this._payIdx[type] = idx;
+    }
+    return idx[customerId] || null;
   },
 
   // Qarz "qizil" (2+ oy) bo'ladi: qarz yozilganiga 2 oydan oshgan VA mijoz
@@ -435,3 +458,9 @@ const DB = {
       </div>`;
   }
 };
+
+// Boshqa tabda ma'lumot o'zgarsa shu tabdagi kesh eskiradi. Tozalamasak, bu tab
+// eski ro'yxatni ustiga yozib, u yerda kiritilgan qarzni o'chirib yuborardi.
+window.addEventListener('storage', e => {
+  if (!e.key || e.key.indexOf('gm_') === 0) DB.clearCache();
+});

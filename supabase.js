@@ -33,6 +33,8 @@ const Cloud = {
       rows.forEach(row => {
         localStorage.setItem(row.id, JSON.stringify(row.data));
       });
+      // localStorage to'g'ridan-to'g'ri o'zgardi — DB keshi eskirdi
+      if (typeof DB !== 'undefined') DB.clearCache();
       return true;
     } catch(e) {
       console.warn('Cloud pull:', e.message);

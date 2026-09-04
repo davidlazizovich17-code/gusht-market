@@ -228,16 +228,19 @@ function toggleOverdue() {
 }
 
 function renderOverdueBox() {
-  const all = DB.getCustomers(TYPE).filter(c => !c.blocked);
-  const overdue = all.filter(c =>
-    DB.getDebts(TYPE).some(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue')
-  ).map(c => ({
-    id: c.id,
-    name: c.name,
-    phone: c.phone,
-    debt: DB.getCustomerDebt(TYPE, c.id),
-    note: DB.getDebts(TYPE).filter(d => d.customerId === c.id && DB.debtStatus(d) === 'overdue').map(d => d.note).filter(Boolean).join('; ')
-  }));
+  const overdue = [];
+  DB.getCustomers(TYPE).filter(c => !c.blocked).forEach(c => {
+    const custDebts = _idxDebts[c.id] || [];
+    const late = custDebts.filter(d => DB.debtStatus(d) === 'overdue');
+    if (!late.length) return;
+    overdue.push({
+      id: c.id,
+      name: c.name,
+      phone: c.phone,
+      debt: custDebts.reduce((s, d) => s + (d.status !== 'paid' ? d.remaining : 0), 0),
+      note: late.map(d => d.note).filter(Boolean).join('; ')
+    });
+  });
 
   const box = document.getElementById('overdueBox');
   if (!overdue.length) { box.innerHTML = ''; return; }
@@ -354,6 +357,10 @@ function printAllOverdue() {
 }
 
 // ─── Render List ──────────────────────────────────────────────────────────
+// Bir render davomida qarz va to'lovlar mijoz bo'yicha bir marta guruhlanadi —
+// aks holda har bir mijoz uchun butun ro'yxat qaytadan aylanib chiqilardi.
+let _idxDebts = {}, _idxPays = {};
+
 let _searchTimer;
 function debouncedSearch() {
   clearTimeout(_searchTimer);
@@ -363,22 +370,26 @@ function debouncedSearch() {
 function renderList() {
   const q = document.getElementById('searchInput').value.toLowerCase();
   const filter = document.getElementById('filterStatus').value;
-  let customers = DB.getCustomers(TYPE);
+  let customers = DB.getCustomers(TYPE).slice();
 
   if (q) customers = customers.filter(c => c.name.toLowerCase().includes(q) || c.phone.includes(q));
   if (filter === 'active') customers = customers.filter(c => !c.blocked);
   if (filter === 'blocked') customers = customers.filter(c => c.blocked);
 
+  _idxDebts = {}; _idxPays = {};
+  DB.getDebts(TYPE).forEach(d => (_idxDebts[d.customerId] = _idxDebts[d.customerId] || []).push(d));
+  DB.getPayments(TYPE).forEach(p => (_idxPays[p.customerId] = _idxPays[p.customerId] || []).push(p));
+
   // Debt cache — sort uchun har safar qayta hisoblash o'rniga bir marta
   const debtCache = {};
-  DB.getDebts(TYPE).forEach(d => {
-    if (d.status !== 'paid') debtCache[d.customerId] = (debtCache[d.customerId] || 0) + d.remaining;
+  Object.keys(_idxDebts).forEach(id => {
+    debtCache[id] = _idxDebts[id].reduce((s, d) => s + (d.status !== 'paid' ? d.remaining : 0), 0);
   });
   customers.sort((a, b) => (debtCache[b.id] || 0) - (debtCache[a.id] || 0));
 
   const all = DB.getCustomers(TYPE);
   const blocked = all.filter(c => c.blocked).length;
-  const debtors = all.filter(c => !c.blocked && DB.getCustomerDebt(TYPE, c.id) > 0).length;
+  const debtors = all.filter(c => !c.blocked && (debtCache[c.id] || 0) > 0).length;
 
   document.getElementById('custCount').textContent = `(${customers.length} ta)`;
   document.getElementById('statBadges').innerHTML = `
@@ -396,8 +407,9 @@ function renderList() {
 }
 
 function buildCustCard(c) {
-  const debt = DB.getCustomerDebt(TYPE, c.id);
-  const activeDebts = DB.getDebts(TYPE).filter(d => d.customerId === c.id && d.status !== 'paid');
+  const custDebts = _idxDebts[c.id] || [];
+  const activeDebts = custDebts.filter(d => d.status !== 'paid');
+  const debt = activeDebts.reduce((s, d) => s + d.remaining, 0);
   const hasOverdue = activeDebts.some(d => DB.isDebtOverdue(d));
 
   let cardClass = '';
@@ -422,8 +434,8 @@ function buildCustCard(c) {
       <i class="fa-solid fa-${c.blocked?'ban':'check'}"></i> ${c.blocked?'Bloklangan':'Qarz yo\'q'}
     </div>`;
 
-  const custPayments = DB.getPayments(TYPE)
-    .filter(p => p.customerId === c.id)
+  const custPayments = (_idxPays[c.id] || [])
+    .slice()
     .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
     .slice(0, 10);
 
@@ -437,7 +449,7 @@ function buildCustCard(c) {
         </div>`).join('')}
     </div>` : '';
 
-  const allDebts = DB.getDebts(TYPE).filter(d => d.customerId === c.id);
+  const allDebts = custDebts;
   const paidCount = allDebts.filter(d => d.status === 'paid').length;
 
   return `
