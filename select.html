@@ -462,7 +462,7 @@ function setStatus(msg) { document.getElementById('pdfStatus').textContent = msg
 function showLoader(on) { document.getElementById('pdfOverlay').style.display = on ? 'flex' : 'none'; }
 
 // ─── Qo'lda chaqirish (double-click) ─────────────────────────
-// Kunlik avtomatik yuborish report.js da — har kuni 23:59 da bir marta.
+// Kunlik avtomatik yuborish report.js da — har kuni 20:00 dan keyin bir marta.
 async function exportAllPDF() {
   showLoader(true);
   const res = await Report.buildAndSend(setStatus);

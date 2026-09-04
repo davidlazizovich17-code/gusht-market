@@ -1,11 +1,12 @@
 'use strict';
 
 // Kunlik umumiy qarz PDF hisoboti — Telegramga HAR KUNI FAQAT BIR MARTA,
-// soat 23:59 da yuboriladi. Sahifa shu paytda ochiq turgan bo'lishi kerak.
+// soat 20:00 dan keyin yuboriladi. Sahifa ochiq turishi kerak; agar 20:00 da
+// yopiq bo'lsa, o'sha kuni sahifa ochilishi bilan yuboriladi.
 const Report = {
   FLAG: 'gm_daily_pdf_sent',
-  SEND_HOUR: 23,
-  SEND_MINUTE: 59,
+  SEND_HOUR: 20,
+  SEND_MINUTE: 0,
   _timer: null,
 
   TYPE_LIST: [
@@ -143,7 +144,7 @@ const Report = {
 
   async _tick() {
     const now = new Date();
-    if (now.getHours() !== this.SEND_HOUR || now.getMinutes() < this.SEND_MINUTE) return;
+    if (now.getHours() * 60 + now.getMinutes() < this.SEND_HOUR * 60 + this.SEND_MINUTE) return;
     if (this._sentToday()) return;
 
     // Ikki marta ketmasligi uchun flagni yuborishdan OLDIN qo'yamiz
