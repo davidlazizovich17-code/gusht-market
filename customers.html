@@ -215,6 +215,18 @@ document.getElementById('sidebar').innerHTML = DB.buildSidebar(TYPE, 'customers'
 let _debtCustId = '', _debtCustName = '';
 
 // ─── Overdue Box ──────────────────────────────────────────────────────────
+// Ro'yxat uzun bo'lgani uchun yopiq holda turadi — sarlavhaga bosilsa ochiladi.
+let _overdueOpen = false;
+
+function toggleOverdue() {
+  _overdueOpen = !_overdueOpen;
+  const body = document.getElementById('overdueBody');
+  if (!body) return;
+  body.style.display = _overdueOpen ? '' : 'none';
+  document.getElementById('overdueCaret').classList.toggle('open', _overdueOpen);
+  document.getElementById('overdueHead').style.borderBottomWidth = _overdueOpen ? '1px' : '0';
+}
+
 function renderOverdueBox() {
   const all = DB.getCustomers(TYPE).filter(c => !c.blocked);
   const overdue = all.filter(c =>
@@ -244,14 +256,17 @@ function renderOverdueBox() {
   }).join('');
 
   box.innerHTML = `<div class="card" style="border:1.5px solid var(--overdue);margin-bottom:20px">
-    <div class="card-header" style="border-bottom:1px solid var(--overdue)">
+    <div class="card-header" id="overdueHead" style="border-bottom:${_overdueOpen ? '1px' : '0'} solid var(--overdue);cursor:pointer" onclick="toggleOverdue()">
       <div class="card-title" style="color:var(--overdue)">
         <i class="fa-solid fa-triangle-exclamation"></i>
         2+ oy muddati o'tgan qarzdorlar &nbsp;<span style="font-weight:400;font-size:13px">(${overdue.length} ta)</span>
       </div>
-      ${printAllBtn}
+      <div style="display:flex;align-items:center;gap:12px">
+        <span onclick="event.stopPropagation()">${printAllBtn}</span>
+        <i class="fa-solid fa-chevron-down cust-caret${_overdueOpen ? ' open' : ''}" id="overdueCaret" style="color:var(--overdue)"></i>
+      </div>
     </div>
-    <div class="card-body">
+    <div class="card-body" id="overdueBody" style="max-height:420px;overflow-y:auto;${_overdueOpen ? '' : 'display:none'}">
       <table>
         <thead><tr><th>Ism familiya</th><th>Telefon</th><th>Qarz summasi</th><th>Izoh</th><th></th></tr></thead>
         <tbody>${rows}</tbody>
