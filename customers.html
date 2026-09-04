@@ -446,6 +446,7 @@ function buildCustCard(c) {
         <div class="cust-info">
           <div class="cust-name">
             ${c.name}
+            ${!c.blocked && hasOverdue ? `<span class="overdue-badge" style="margin-left:6px;font-size:10px"><i class="fa-solid fa-triangle-exclamation"></i> 2+ oy</span>` : ''}
             ${c.blocked ? `<span class="badge badge-black" style="margin-left:6px;font-size:10px"><i class="fa-solid fa-ban"></i> Bloklangan</span>` : ''}
           </div>
           <div class="cust-phone"><i class="fa-solid fa-phone" style="font-size:10px;margin-right:3px"></i>${c.phone}</div>

@@ -436,7 +436,18 @@ tr:hover td { background: rgba(255,255,255,0.02); }
 
 .cust-card:hover { border-color: #444; }
 .cust-card.has-debt { border-left: 3px solid var(--red-light); }
-.cust-card.has-overdue { border-left: 3px solid var(--overdue); }
+
+.cust-card.has-overdue {
+  background: rgba(255,68,68,0.07);
+  border: 1px solid rgba(255,68,68,0.3);
+  border-left: 3px solid var(--overdue);
+}
+
+.cust-card.has-overdue:hover {
+  border-color: rgba(255,68,68,0.5); border-left-color: var(--overdue);
+}
+
+.cust-card.has-overdue .cust-name { color: var(--overdue); }
 
 .cust-header {
   display: flex; align-items: center; gap: 14px; padding: 13px 16px;
