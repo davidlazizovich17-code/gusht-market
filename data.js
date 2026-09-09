@@ -23,15 +23,100 @@ const DB = {
     return val;
   },
 
+  // Faqat shu qurilma xotirasiga yozadi. Bulutga yuborish _touch() orqali,
+  // har bir yozuv alohida — butun ro'yxat hech qachon almashtirilmaydi.
   set(type, key, data) {
     const k = this._key(type, key);
     this._cache[k] = data;
     this._payIdx = {};
-    localStorage.setItem(k, JSON.stringify(data));
-    if (typeof Cloud !== 'undefined') Cloud.push(k, data);
+    try { localStorage.setItem(k, JSON.stringify(data)); } catch (e) {}
   },
 
   clearCache() { this._cache = {}; this._payIdx = {}; },
+
+  _list(type, coll) { return this.get(type, coll) || []; },
+  _alive(list) { return list.filter(x => x && !x._del); },
+
+  // Yozuvni "o'zgardi" deb belgilab, bulutga navbatga qo'yadi
+  _touch(type, coll, rec) {
+    if (!rec) return rec;
+    rec._ts = Date.now();
+    if (typeof Cloud !== 'undefined') Cloud.pushRecord(type, coll, rec);
+    return rec;
+  },
+
+  // Yozuvni o'chirmaymiz — belgilaymiz. Shu sababli eski nusxa yangisining
+  // ustiga tushsa ham hech narsa yo'qolmaydi.
+  _kill(type, coll, rec) {
+    if (!rec) return;
+    rec._del = true;
+    this._touch(type, coll, rec);
+  },
+
+  COLLS: ['customers', 'debts', 'payments', 'history', 'products'],
+
+  // Serverdan kelgan yozuvlarni mahalliy ro'yxat bilan BIRLASHTIRADI.
+  // Ustiga yozmaydi: ikkala tomonda bor yozuvdan yangirog'i (_ts) olinadi,
+  // faqat bir tomonda borlari esa shunchaki qo'shiladi. Shu sababli eski
+  // nusxa yangi qarzni o'chira olmaydi.
+  applyRemote(groups, counters, legacy) {
+    groups = groups || {}; counters = counters || {}; legacy = legacy || {};
+    this.TYPES.forEach(type => {
+      this.COLLS.forEach(coll => {
+        const local = this._list(type, coll);
+        const byId = {};
+        local.forEach(r => { if (r && r.id) byId[r.id] = r; });
+
+        // Eski (butun ro'yxatli) qatorlar — yangi qurilma uchun va o'tish davri
+        const leg = legacy[this._key(type, coll)];
+        if (Array.isArray(leg)) {
+          leg.forEach(r => { if (r && r.id && !byId[r.id]) byId[r.id] = r; });
+        }
+
+        const remote = groups[type + '|' + coll] || [];
+        remote.forEach(r => {
+          if (!r || !r.id) return;
+          const cur = byId[r.id];
+          if (!cur || (r._ts || 0) > (cur._ts || 0)) byId[r.id] = r;
+        });
+
+        const merged = Object.keys(byId).map(k => byId[k]);
+        if (!merged.length && !local.length) return;
+        merged.sort((a, b) => String(a.createdAt || '').localeCompare(String(b.createdAt || '')));
+        this.set(type, coll, merged);
+      });
+
+      // Hisoblagich hech qachon orqaga ketmasin — aks holda qarz raqamlari
+      // qayta ishlatilib, eski qarz ustiga yozilib ketardi
+      const lc = Number(this.get(type, 'counter') || 0);
+      const gc = Number(legacy[this._key(type, 'counter')] || 0);
+      const rc = Number(counters[type] || 0);
+      const mx = Math.max(lc, gc, rc);
+      if (mx !== lc) this.set(type, 'counter', mx);
+    });
+    this._payIdx = {};
+  },
+
+  // Serverda yo'q yoki eskirgan yozuvlarni yuborish navbatiga qo'yadi.
+  // Birinchi ishga tushirishda eski ma'lumotni ko'chiradi, keyinchalik esa
+  // yuborilmay qolgan har qanday yozuvni tiklaydi.
+  pushMissing(groups) {
+    if (typeof Cloud === 'undefined') return;
+    groups = groups || {};
+    this.TYPES.forEach(type => {
+      this.COLLS.forEach(coll => {
+        const remote = {};
+        (groups[type + '|' + coll] || []).forEach(r => { if (r && r.id) remote[r.id] = r; });
+        this._list(type, coll).forEach(r => {
+          if (!r || !r.id) return;
+          const rem = remote[r.id];
+          if (!rem || (r._ts || 0) > (rem._ts || 0)) Cloud.pushRecord(type, coll, r);
+        });
+      });
+      const c = Number(this.get(type, 'counter') || 0);
+      if (c) Cloud.pushCounter(type, c);
+    });
+  },
 
   // ─── Auth ─────────────────────────────────────────────────────────────
   checkLogin() {
@@ -73,36 +158,38 @@ const DB = {
   getTypeName(type) { return this.TYPE_NAMES[type] || type; },
 
   // ─── Customers ────────────────────────────────────────────────────────────
-  getCustomers(type) { return this.get(type, 'customers') || []; },
+  getCustomers(type) { return this._alive(this._list(type, 'customers')); },
   saveCustomers(type, d) { this.set(type, 'customers', d); },
 
   addCustomer(type, name, phone, note) {
-    const list = this.getCustomers(type);
+    const list = this._list(type, 'customers');
     const c = { id: this.generateId(), name: name.trim(), phone: phone.trim(), note: (note||'').trim(), blocked: false, blockReason: '', blockDate: null, createdAt: new Date().toISOString() };
+    this._touch(type, 'customers', c);
     list.push(c); this.saveCustomers(type, list); return c;
   },
 
   updateCustomer(type, id, name, phone, note) {
-    const list = this.getCustomers(type);
+    const list = this._list(type, 'customers');
     const c = list.find(x => x.id === id);
-    if (c) { c.name = name.trim(); c.phone = phone.trim(); c.note = (note||'').trim(); this.saveCustomers(type, list); }
+    if (c) { c.name = name.trim(); c.phone = phone.trim(); c.note = (note||'').trim(); this._touch(type, 'customers', c); this.saveCustomers(type, list); }
   },
 
   deleteCustomer(type, id) {
-    this.saveCustomers(type, this.getCustomers(type).filter(c => c.id !== id));
-
+    const list = this._list(type, 'customers');
+    const c = list.find(x => x.id === id);
+    if (c) { this._kill(type, 'customers', c); this.saveCustomers(type, list); }
   },
 
   blockCustomer(type, id, reason) {
-    const list = this.getCustomers(type);
+    const list = this._list(type, 'customers');
     const c = list.find(x => x.id === id);
-    if (c) { c.blocked = true; c.blockReason = reason || ''; c.blockDate = new Date().toISOString(); this.saveCustomers(type, list); }
+    if (c) { c.blocked = true; c.blockReason = reason || ''; c.blockDate = new Date().toISOString(); this._touch(type, 'customers', c); this.saveCustomers(type, list); }
   },
 
   unblockCustomer(type, id) {
-    const list = this.getCustomers(type);
+    const list = this._list(type, 'customers');
     const c = list.find(x => x.id === id);
-    if (c) { c.blocked = false; c.blockReason = ''; c.blockDate = null; this.saveCustomers(type, list); }
+    if (c) { c.blocked = false; c.blockReason = ''; c.blockDate = null; this._touch(type, 'customers', c); this.saveCustomers(type, list); }
   },
 
   // ─── Products ─────────────────────────────────────────────────────────────
@@ -117,53 +204,69 @@ const DB = {
 
   getProducts(type) {
     let list = this.get(type, 'products');
-    if (!list) { list = this.DEFAULT_PRODUCTS.map(p => ({ ...p, id: this.generateId() })); this.set(type, 'products', list); }
-    return list;
+    if (!list) {
+      list = this.DEFAULT_PRODUCTS.map(p => ({ ...p, id: this.generateId() }));
+      list.forEach(p => this._touch(type, 'products', p));
+      this.set(type, 'products', list);
+    }
+    return this._alive(list);
   },
 
   saveProducts(type, d) { this.set(type, 'products', d); },
 
   addProduct(type, name, price, icon) {
-    const list = this.getProducts(type);
+    const list = this._list(type, 'products');
     const p = { id: this.generateId(), name: name.trim(), price: Number(price), icon: icon || 'fa-drumstick-bite' };
+    this._touch(type, 'products', p);
     list.push(p); this.saveProducts(type, list); return p;
   },
 
   updateProduct(type, id, name, price) {
-    const list = this.getProducts(type);
+    const list = this._list(type, 'products');
     const p = list.find(x => x.id === id);
-    if (p) { p.name = name.trim(); p.price = Number(price); this.saveProducts(type, list); }
+    if (p) { p.name = name.trim(); p.price = Number(price); this._touch(type, 'products', p); this.saveProducts(type, list); }
   },
 
   deleteProduct(type, id) {
-    this.saveProducts(type, this.getProducts(type).filter(p => p.id !== id));
+    const list = this._list(type, 'products');
+    const p = list.find(x => x.id === id);
+    if (p) { this._kill(type, 'products', p); this.saveProducts(type, list); }
   },
 
   // ─── Debts ────────────────────────────────────────────────────────────────
-  getDebts(type) { return this.get(type, 'debts') || []; },
+  // Ko'rinadigan qarzlar: o'chirilmagan va to'lanmagan.
+  // To'langan qarz endi ro'yxatdan O'CHIRILMAYDI, faqat 'paid' deb belgilanadi —
+  // shu sababli sinxronizatsiyada uni "yo'q qilingan" deb tushunish mumkin emas.
+  getDebts(type) {
+    return this._list(type, 'debts').filter(d => d && !d._del && d.status !== 'paid');
+  },
   saveDebts(type, d) { this.set(type, 'debts', d); },
 
   addDebt(type, { customerId, customerName, meatType, pricePerKg, kg, note }) {
     this.getHistory(type); // migratsiya yangi yozuvdan OLDIN bajarilsin
-    const list = this.getDebts(type);
+    const list = this._list(type, 'debts');
     const num = (this.get(type, 'counter') || 0) + 1;
     this.set(type, 'counter', num);
+    if (typeof Cloud !== 'undefined') Cloud.pushCounter(type, num);
     const total = Math.round(pricePerKg * kg);
     const d = { id: this.generateId(), num, customerId, customerName, meatType, pricePerKg: Number(pricePerKg), kg: Number(kg), total, paid: 0, remaining: total, note: note || '', status: 'unpaid', createdAt: new Date().toISOString() };
+    this._touch(type, 'debts', d);
     list.push(d); this.saveDebts(type, list);
     this.logHistory(type, { customerId, customerName, kind: 'debt', amount: total, note, debtNum: num });
     return d;
   },
 
   deleteDebt(type, id) {
-    this.saveDebts(type, this.getDebts(type).filter(d => d.id !== id));
+    const list = this._list(type, 'debts');
+    const d = list.find(x => x.id === id);
+    if (d) { this._kill(type, 'debts', d); this.saveDebts(type, list); }
   },
 
   writeOffCustomerDebt(type, customerId, amount) {
     this.getHistory(type); // migratsiya o'zgarishdan OLDIN bajarilsin
-    let debts = this.getDebts(type);
+    const debts = this._list(type, 'debts');
     const active = debts
-      .filter(d => d.customerId === customerId && d.remaining > 0)
+      .filter(d => !d._del && d.status !== 'paid' && d.customerId === customerId && d.remaining > 0)
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
     let left = Math.max(0, Number(amount));
     for (const debt of active) {
@@ -171,55 +274,73 @@ const DB = {
       const cut = Math.min(left, debt.remaining);
       debt.remaining -= cut;
       debt.total = debt.paid + debt.remaining;
+      if (debt.remaining <= 0) debt.status = 'paid';
+      this._touch(type, 'debts', debt);
       left -= cut;
     }
-    debts = debts.filter(d => d.remaining > 0 || d.customerId !== customerId);
     this.saveDebts(type, debts);
   },
 
   writeOffDebt(type, debtId, amount) {
     this.getHistory(type); // migratsiya o'zgarishdan OLDIN bajarilsin
-    const debts = this.getDebts(type);
-    const debt = debts.find(d => d.id === debtId);
+    const debts = this._list(type, 'debts');
+    const debt = debts.find(d => d.id === debtId && !d._del);
     if (!debt) return 0;
     const writeOff = Math.min(Math.max(0, Number(amount)), debt.remaining);
     if (writeOff <= 0) return 0;
     debt.remaining -= writeOff;
     debt.total = debt.paid + debt.remaining;
-    if (debt.remaining <= 0) {
-      this.saveDebts(type, debts.filter(d => d.id !== debtId));
-    } else {
-      this.saveDebts(type, debts);
-    }
+    if (debt.remaining <= 0) debt.status = 'paid';
+    this._touch(type, 'debts', debt);
+    this.saveDebts(type, debts);
     return writeOff;
   },
 
   deleteCustomerWithDebts(type, customerId) {
-    this.saveCustomers(type, this.getCustomers(type).filter(c => c.id !== customerId));
-    this.saveDebts(type, this.getDebts(type).filter(d => d.customerId !== customerId));
-    this.savePayments(type, this.getPayments(type).filter(p => p.customerId !== customerId));
+    const custs = this._list(type, 'customers');
+    const c = custs.find(x => x.id === customerId);
+    if (c) this._kill(type, 'customers', c);
+    this.saveCustomers(type, custs);
+
+    const debts = this._list(type, 'debts');
+    debts.forEach(d => { if (d.customerId === customerId && !d._del) this._kill(type, 'debts', d); });
+    this.saveDebts(type, debts);
+
+    const pays = this._list(type, 'payments');
+    pays.forEach(p => { if (p.customerId === customerId && !p._del) this._kill(type, 'payments', p); });
+    this.savePayments(type, pays);
   },
 
   // ─── Payments ─────────────────────────────────────────────────────────────
-  getPayments(type) { return this.get(type, 'payments') || []; },
+  getPayments(type) { return this._alive(this._list(type, 'payments')); },
   savePayments(type, d) { this.set(type, 'payments', d); },
 
   addPayment(type, debtId, amount) {
     this.getHistory(type); // migratsiya yangi yozuvdan OLDIN bajarilsin
-    const debts = this.getDebts(type);
-    const debt = debts.find(d => d.id === debtId);
+    const debts = this._list(type, 'debts');
+    const debt = debts.find(d => d.id === debtId && !d._del);
     if (!debt || debt.remaining <= 0) return null;
     const actual = Math.min(Number(amount), debt.remaining);
     debt.paid += actual; debt.remaining -= actual;
-    const payments = this.getPayments(type);
+    if (debt.remaining <= 0) debt.status = 'paid';
+    this._touch(type, 'debts', debt);
+    const payments = this._list(type, 'payments');
     const p = { id: this.generateId(), debtId, customerId: debt.customerId, customerName: debt.customerName, amount: actual, debtNum: debt.num, createdAt: new Date().toISOString() };
+    this._touch(type, 'payments', p);
     payments.push(p);
     this.logHistory(type, { customerId: debt.customerId, customerName: debt.customerName, kind: 'payment', amount: actual, debtNum: debt.num });
-    if (debt.remaining <= 0) {
-      this.saveDebts(type, debts.filter(d => d.id !== debtId));
-    } else {
-      this.saveDebts(type, debts);
-    }
+    this.saveDebts(type, debts);
+    this.savePayments(type, payments);
+    return p;
+  },
+
+  // Qarz kamaytirilganda to'lov yozuvini qo'shadi (ilgari bu customers.html
+  // ichida qo'lda qilinardi — u yerda o'chirilgan yozuvlar yo'qolib ketardi)
+  addWriteOffPayment(type, customerId, customerName, amount) {
+    const payments = this._list(type, 'payments');
+    const p = { id: this.generateId(), debtId: null, customerId, customerName: customerName || '', amount: Number(amount), debtNum: null, createdAt: new Date().toISOString() };
+    this._touch(type, 'payments', p);
+    payments.push(p);
     this.savePayments(type, payments);
     return p;
   },
@@ -236,21 +357,25 @@ const DB = {
         ...this.getDebts(type).map(d => ({ id: this.generateId(), customerId: d.customerId, customerName: d.customerName, kind: 'debt', amount: d.total, note: d.note || '', debtNum: d.num, createdAt: d.createdAt })),
         ...this.getPayments(type).map(p => ({ id: this.generateId(), customerId: p.customerId, customerName: p.customerName, kind: 'payment', amount: p.amount, note: '', debtNum: p.debtNum || null, createdAt: p.createdAt }))
       ].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+      list.forEach(h => this._touch(type, 'history', h));
       this.set(type, 'history', list);
     }
-    return list;
+    return this._alive(list);
   },
 
   saveHistory(type, d) { this.set(type, 'history', d); },
 
   logHistory(type, { customerId, customerName, kind, amount, note, debtNum }) {
-    const list = this.getHistory(type);
-    list.push({
+    this.getHistory(type); // migratsiya bo'lsa avval bajarilsin
+    const list = this._list(type, 'history');
+    const h = {
       id: this.generateId(), customerId, customerName,
       kind, // 'debt' — pul berildi (qarz yozildi), 'payment' — pul olindi (to'lov)
       amount: Number(amount), note: (note || '').trim(), debtNum: debtNum || null,
       createdAt: new Date().toISOString()
-    });
+    };
+    this._touch(type, 'history', h);
+    list.push(h);
     this.saveHistory(type, list);
   },
 
@@ -259,7 +384,9 @@ const DB = {
   },
 
   clearCustomerHistory(type, customerId) {
-    this.saveHistory(type, this.getHistory(type).filter(h => h.customerId !== customerId));
+    const list = this._list(type, 'history');
+    list.forEach(h => { if (h.customerId === customerId && !h._del) this._kill(type, 'history', h); });
+    this.saveHistory(type, list);
   },
 
   buildHistoryHTML(type, customerId, customerName) {
@@ -366,12 +493,13 @@ const DB = {
   exportAll() {
     const data = {};
     ['postoyanniy', 'optom', 'klient'].forEach(t => {
+      // Xom ro'yxat olinadi — o'chirilgan va to'langanlari ham zaxiraga tushsin
       data[t] = {
-        customers: this.getCustomers(t),
-        debts:     this.getDebts(t),
-        payments:  this.getPayments(t),
-        products:  this.getProducts(t),
-        history:   this.getHistory(t),
+        customers: this._list(t, 'customers'),
+        debts:     this._list(t, 'debts'),
+        payments:  this._list(t, 'payments'),
+        products:  this._list(t, 'products'),
+        history:   this._list(t, 'history'),
         counter:   this.get(t, 'counter') || 0
       };
     });
@@ -391,6 +519,8 @@ const DB = {
       if (data[t].history)   this.saveHistory(t, data[t].history);
       if (data[t].counter)   this.set(t, 'counter', data[t].counter);
     });
+    // Tiklangan yozuvlarni bulutga ham yuboramiz
+    this.pushMissing({});
     return true;
   },
 

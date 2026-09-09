@@ -681,9 +681,7 @@ function doWriteOff() {
   const cust = DB.getCustomers(TYPE).find(c => c.id === _removeCustomerId);
   DB.writeOffCustomerDebt(TYPE, _removeCustomerId, amount);
   // To'lovlar tarixiga yozib qo'yish (To'landi bo'limida chiqishi uchun)
-  const payments = DB.getPayments(TYPE);
-  payments.push({ id: DB.generateId(), debtId: null, customerId: _removeCustomerId, customerName: cust ? cust.name : '', amount, debtNum: null, createdAt: new Date().toISOString() });
-  DB.savePayments(TYPE, payments);
+  DB.addWriteOffPayment(TYPE, _removeCustomerId, cust ? cust.name : '', amount);
   DB.logHistory(TYPE, { customerId: _removeCustomerId, customerName: cust ? cust.name : '', kind: 'payment', amount, note: 'Qarz kamaytirildi' });
   TG.notifyPayment(DB.getTypeName(TYPE), cust ? cust.name : '', amount);
   closeModal('removeModal');
