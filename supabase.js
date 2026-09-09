@@ -19,6 +19,9 @@ const Cloud = {
   PAGE: 1000,
 
   _pending: null,
+  _index: null,
+  _dirty: false,
+  _saveTimer: null,
   _busy: false,
   _fails: 0,
   _timer: null,
@@ -47,27 +50,49 @@ const Cloud = {
     return this._pending;
   },
 
-  _save() {
-    try { localStorage.setItem(this.QUEUE_KEY, JSON.stringify(this._pending || [])); }
+  // Saqlash kechiktiriladi. Ilgari har bir yozuvda butun navbat qaytadan
+  // JSON ga aylantirilardi — minglab yozuvda brauzer qotib qolardi.
+  _saveNow() {
+    if (!this._pending) return;
+    this._dirty = false;
+    if (this._saveTimer) { clearTimeout(this._saveTimer); this._saveTimer = null; }
+    try { localStorage.setItem(this.QUEUE_KEY, JSON.stringify(this._pending)); }
     catch (e) { /* joy yetmasa ham ishlashda davom etamiz */ }
   },
 
-  _enqueue(id, data) {
+  _save() {
+    this._dirty = true;
+    if (this._saveTimer) return;
+    this._saveTimer = setTimeout(() => { this._saveTimer = null; if (this._dirty) this._saveNow(); }, 300);
+  },
+
+  // Navbatda faqat HAVOLA saqlanadi: qaysi baza, qaysi to'plam, qaysi yozuv.
+  // Yozuvning o'zi yuborish paytida o'qiladi — shuning uchun navbat kichik
+  // bo'ladi va doim eng oxirgi holat yuboriladi.
+  _key(e) { return e.t + '|' + e.c + '|' + (e.i || ''); },
+
+  _reindex() {
+    this._index = {};
     const q = this._load();
-    // Bir xil yozuv navbatda bo'lsa, eskisini yangisi bilan almashtiramiz
-    const i = q.findIndex(x => x.id === id);
-    if (i >= 0) q[i] = { id, data }; else q.push({ id, data });
+    for (let n = 0; n < q.length; n++) this._index[this._key(q[n])] = n;
+  },
+
+  _enqueue(entry) {
+    const q = this._load();
+    if (!this._index) this._reindex();
+    const k = this._key(entry);
+    if (this._index[k] === undefined) { this._index[k] = q.length; q.push(entry); }
     this._save();
     this._later();
   },
 
   pushRecord(type, coll, rec) {
     if (!rec || !rec.id) return;
-    this._enqueue(this.rowId(type, coll, rec.id), { t: type, c: coll, r: rec });
+    this._enqueue({ t: type, c: coll, i: rec.id });
   },
 
-  pushCounter(type, value) {
-    this._enqueue('c_' + type, { t: type, c: 'counter', v: value });
+  pushCounter(type) {
+    this._enqueue({ t: type, c: 'counter' });
   },
 
   pendingCount() { return this._load().length; },
@@ -84,19 +109,41 @@ const Cloud = {
     this._busy = true;
 
     const batch = q.slice(0, this.BATCH);
+    const rows = [];
+    const maps = {};
+    batch.forEach(e => {
+      if (e.c === 'counter') {
+        const v = Number((typeof DB !== 'undefined' && DB.get(e.t, 'counter')) || 0);
+        rows.push({ id: 'c_' + e.t, data: { t: e.t, c: 'counter', v } });
+        return;
+      }
+      if (typeof DB === 'undefined') return;
+      const mk = e.t + '|' + e.c;
+      if (!maps[mk]) {
+        const m = {};
+        (DB.get(e.t, e.c) || []).forEach(r => { if (r && r.id) m[r.id] = r; });
+        maps[mk] = m;
+      }
+      const rec = maps[mk][e.i];
+      if (rec) rows.push({ id: this.rowId(e.t, e.c, e.i), data: { t: e.t, c: e.c, r: rec } });
+    });
+
     try {
-      const res = await fetch(this._url + '/rest/v1/store', {
-        method: 'POST',
-        headers: this._h({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-        body: JSON.stringify(batch.map(x => ({ id: x.id, data: x.data })))
-      });
-      if (!res.ok) throw new Error('HTTP ' + res.status);
+      if (rows.length) {
+        const res = await fetch(this._url + '/rest/v1/store', {
+          method: 'POST',
+          headers: this._h({ 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+          body: JSON.stringify(rows)
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+      }
 
       // Faqat yuborilganlarini navbatdan olib tashlaymiz
       const sent = {};
-      batch.forEach(x => { sent[x.id] = true; });
-      this._pending = this._load().filter(x => !sent[x.id]);
-      this._save();
+      batch.forEach(e => { sent[this._key(e)] = true; });
+      this._pending = this._load().filter(e => !sent[this._key(e)]);
+      this._reindex();
+      this._saveNow();
       this._fails = 0;
       this._busy = false;
       this._status(true);
@@ -198,3 +245,6 @@ const Cloud = {
 // Sahifa ochilganda va internet qaytganda navbatni yuborishga urinamiz
 window.addEventListener('online', () => Cloud.flush());
 window.addEventListener('load', () => Cloud.flush());
+// Sahifa yopilishidan oldin navbatni albatta saqlab qolamiz
+window.addEventListener('pagehide', () => Cloud._saveNow());
+window.addEventListener('beforeunload', () => Cloud._saveNow());

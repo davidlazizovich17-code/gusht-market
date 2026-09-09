@@ -114,7 +114,7 @@ const DB = {
         });
       });
       const c = Number(this.get(type, 'counter') || 0);
-      if (c) Cloud.pushCounter(type, c);
+      if (c) Cloud.pushCounter(type);
     });
   },
 
@@ -247,7 +247,7 @@ const DB = {
     const list = this._list(type, 'debts');
     const num = (this.get(type, 'counter') || 0) + 1;
     this.set(type, 'counter', num);
-    if (typeof Cloud !== 'undefined') Cloud.pushCounter(type, num);
+    if (typeof Cloud !== 'undefined') Cloud.pushCounter(type);
     const total = Math.round(pricePerKg * kg);
     const d = { id: this.generateId(), num, customerId, customerName, meatType, pricePerKg: Number(pricePerKg), kg: Number(kg), total, paid: 0, remaining: total, note: note || '', status: 'unpaid', createdAt: new Date().toISOString() };
     this._touch(type, 'debts', d);
