@@ -60,7 +60,7 @@
 /* ── Header animatsiyasi ─────────────────────────────────── */
 .select-header {
   text-align: center;
-  margin-bottom: 52px;
+  margin-bottom: 36px;
   opacity: 0;
   transform: translateY(-40px);
   animation: headerDrop 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) 0.1s forwards;
@@ -106,14 +106,113 @@
 }
 
 /* ── Grid ────────────────────────────────────────────────── */
+/* Asosiy joylashuv: chapda bazalar, o'ngda qidiruv */
+.select-main {
+  display: grid;
+  grid-template-columns: 380px minmax(0, 1fr);
+  gap: 28px;
+  max-width: 1160px;
+  width: 100%;
+  align-items: stretch;
+}
+
 .select-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 24px;
-  max-width: 900px;
+  grid-template-columns: 1fr;
+  gap: 16px;
   width: 100%;
   perspective: 1200px;
+  align-content: start;
 }
+
+/* Bazalar chap ustunda — ixcham, gorizontal kartalar */
+.select-grid .select-card {
+  flex-direction: row;
+  align-items: center;
+  text-align: left;
+  padding: 20px;
+  gap: 16px;
+  border-radius: 18px;
+}
+.select-grid .select-card-icon {
+  width: 54px; height: 54px; font-size: 21px; border-radius: 15px;
+  margin-bottom: 0; flex-shrink: 0;
+}
+.select-card-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.select-grid .select-card h3 { font-size: 15px; }
+.select-grid .select-card p { font-size: 12px; line-height: 1.5; flex: none; }
+.select-grid .enter-btn { width: auto; margin-top: 0; padding: 9px 14px; white-space: nowrap; flex-shrink: 0; }
+
+/* ── Qidiruv paneli ──────────────────────────────────────── */
+.search-panel {
+  background: linear-gradient(145deg, #1e1e1e 0%, #181818 100%);
+  border: 1px solid #2a2a2a;
+  border-radius: 20px;
+  padding: 22px;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  opacity: 0;
+  animation: fadeUp 0.7s ease 0.9s forwards;
+}
+.search-panel-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; }
+.search-panel-title { font-size: 16px; font-weight: 700; color: #fff; display: flex; align-items: center; gap: 9px; }
+.search-panel-title i { color: var(--red-light); }
+.search-panel-sub { font-size: 12px; color: var(--text2); }
+
+.gs-box { position: relative; display: flex; align-items: center; }
+.gs-box > i { position: absolute; left: 15px; color: var(--text2); font-size: 14px; pointer-events: none; }
+.gs-box input {
+  width: 100%; background: #121212; border: 1px solid #2e2e2e; border-radius: 12px;
+  padding: 13px 42px; color: var(--text); font-size: 15px; outline: none; font-family: inherit;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+.gs-box input:focus { border-color: rgba(231,76,60,0.6); box-shadow: 0 0 0 3px rgba(231,76,60,0.12); }
+.gs-clear {
+  position: absolute; right: 8px; width: 28px; height: 28px; border: none; border-radius: 8px;
+  background: transparent; color: var(--text2); cursor: pointer; font-size: 15px; display: none;
+}
+.gs-clear:hover { background: rgba(255,255,255,0.06); color: #fff; }
+
+.gs-meta { font-size: 12px; color: var(--text2); margin: 12px 2px 8px; min-height: 16px; }
+.gs-results { flex: 1; overflow-y: auto; max-height: 430px; display: flex; flex-direction: column; gap: 8px; padding-right: 2px; }
+.gs-empty { text-align: center; color: var(--text2); font-size: 13px; padding: 46px 16px; line-height: 1.7; }
+.gs-empty i { font-size: 30px; opacity: 0.35; display: block; margin-bottom: 10px; }
+.gs-more { text-align: center; font-size: 12px; color: var(--text2); padding: 8px; }
+
+.gs-row {
+  display: flex; align-items: center; gap: 12px;
+  background: #151515; border: 1px solid #262626; border-left: 3px solid #333;
+  border-radius: 12px; padding: 11px 12px 11px 14px;
+  transition: border-color 0.2s, background 0.2s;
+}
+.gs-row:hover { background: #1a1a1a; border-color: #333; }
+.gs-row.has-debt { border-left-color: var(--red-light); }
+.gs-row.has-overdue { border-left-color: var(--overdue); background: rgba(255,68,68,0.05); }
+.gs-row.is-blocked { opacity: 0.6; }
+.gs-info { flex: 1; min-width: 0; }
+.gs-name { font-size: 14px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.gs-name mark { background: rgba(231,76,60,0.28); color: #fff; border-radius: 3px; padding: 0 1px; }
+.gs-phone { font-size: 12px; color: var(--text2); margin-top: 3px; }
+
+.gs-base {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 20px; white-space: nowrap;
+}
+.gs-base-postoyanniy { background: rgba(241,196,15,0.12); color: #f1c40f; border: 1px solid rgba(241,196,15,0.3); }
+.gs-base-optom       { background: rgba(52,152,219,0.12); color: #5dade2; border: 1px solid rgba(52,152,219,0.3); }
+.gs-base-klient      { background: rgba(231,76,60,0.12);  color: #ff7b6b; border: 1px solid rgba(231,76,60,0.3); }
+
+.gs-debt { font-size: 14px; font-weight: 700; color: var(--red-light); white-space: nowrap; }
+.gs-debt.zero { color: var(--green); font-weight: 600; font-size: 13px; }
+.gs-btns { display: flex; gap: 6px; flex-shrink: 0; }
+.gs-hist {
+  width: 30px; height: 30px; border-radius: 7px; border: 1px solid #333;
+  background: transparent; color: var(--text2); cursor: pointer;
+  display: flex; align-items: center; justify-content: center; font-size: 13px;
+  transition: background 0.15s, color 0.15s;
+}
+.gs-hist:hover { background: rgba(255,255,255,0.06); color: #fff; }
 
 /* ── Kartalar ────────────────────────────────────────────── */
 .select-card {
@@ -294,8 +393,12 @@
 }
 
 /* ── Responsive ──────────────────────────────────────────── */
-@media (max-width: 700px) {
-  .select-grid { grid-template-columns: 1fr; max-width: 360px; }
+@media (max-width: 960px) {
+  .select-main { grid-template-columns: 1fr; max-width: 560px; }
+}
+@media (max-width: 560px) {
+  .gs-row { flex-wrap: wrap; }
+  .gs-debt { order: 3; }
 }
 </style>
 </head>
@@ -315,27 +418,49 @@
     </p>
   </div>
 
-  <div class="select-grid">
-    <a href="dashboard.html?type=postoyanniy" class="select-card">
-      <div class="select-card-icon"><i class="fa-solid fa-star"></i></div>
-      <h3>Постоянный клиентлар</h3>
-      <p>Доимий, ишончли харидорлар учун алоҳида қарз дафтари</p>
-      <div class="enter-btn"><i class="fa-solid fa-arrow-right"></i> Kirish</div>
-    </a>
+  <div class="select-main">
+    <div class="select-grid">
+      <a href="dashboard.html?type=postoyanniy" class="select-card">
+        <div class="select-card-icon"><i class="fa-solid fa-star"></i></div>
+        <div class="select-card-text">
+          <h3>Постоянный клиентлар</h3>
+          <p>Доимий, ишончли харидорлар учун алоҳида қарз дафтари</p>
+        </div>
+        <div class="enter-btn"><i class="fa-solid fa-arrow-right"></i> Kirish</div>
+      </a>
+  
+      <a href="dashboard.html?type=optom" class="select-card">
+        <div class="select-card-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
+        <div class="select-card-text">
+          <h3>Оптомний клиентлар</h3>
+          <p>Катта ҳажмда олувчи оптом харидорлар учун дафтар</p>
+        </div>
+        <div class="enter-btn"><i class="fa-solid fa-arrow-right"></i> Kirish</div>
+      </a>
+  
+      <a href="dashboard.html?type=klient" class="select-card">
+        <div class="select-card-icon"><i class="fa-solid fa-user"></i></div>
+        <div class="select-card-text">
+          <h3>Клиент</h3>
+          <p>Оддий харидорлар учун умумий қарз дафтари</p>
+        </div>
+        <div class="enter-btn"><i class="fa-solid fa-arrow-right"></i> Kirish</div>
+      </a>
+    </div>
 
-    <a href="dashboard.html?type=optom" class="select-card">
-      <div class="select-card-icon"><i class="fa-solid fa-boxes-stacked"></i></div>
-      <h3>Оптомний клиентлар</h3>
-      <p>Катта ҳажмда олувчи оптом харидорлар учун дафтар</p>
-      <div class="enter-btn"><i class="fa-solid fa-arrow-right"></i> Kirish</div>
-    </a>
-
-    <a href="dashboard.html?type=klient" class="select-card">
-      <div class="select-card-icon"><i class="fa-solid fa-user"></i></div>
-      <h3>Клиент</h3>
-      <p>Оддий харидорлар учун умумий қарз дафтари</p>
-      <div class="enter-btn"><i class="fa-solid fa-arrow-right"></i> Kirish</div>
-    </a>
+    <div class="search-panel">
+      <div class="search-panel-head">
+        <div class="search-panel-title"><i class="fa-solid fa-magnifying-glass"></i> Mijoz qidirish</div>
+        <div class="search-panel-sub">Uchala bazadan</div>
+      </div>
+      <div class="gs-box">
+        <i class="fa-solid fa-magnifying-glass"></i>
+        <input type="text" id="gsInput" placeholder="Ism yoki telefon raqam..." autocomplete="off" oninput="gsSchedule()">
+        <button class="gs-clear" id="gsClear" onclick="gsClearInput()" title="Tozalash"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+      <div class="gs-meta" id="gsMeta"></div>
+      <div class="gs-results" id="gsResults"></div>
+    </div>
   </div>
 
   <div class="select-logout">
@@ -442,6 +567,52 @@ function handleImportFile(input) {
 }
 </script>
 
+<!-- Qidiruvdan: QARZ YOZISH -->
+<div class="modal-overlay" id="gsDebtModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-receipt"></i> Qarz yozish</div>
+      <button class="modal-close" onclick="closeModal('gsDebtModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="gsDebtBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('gsDebtModal')"><i class="fa-solid fa-xmark"></i> Bekor</button>
+      <button class="btn btn-primary" onclick="gsSaveDebt()"><i class="fa-solid fa-floppy-disk"></i> Saqlash</button>
+    </div>
+  </div>
+</div>
+
+<!-- Qidiruvdan: QARZ KAMAYTIRISH -->
+<div class="modal-overlay" id="gsRemoveModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title"><i class="fa-solid fa-scissors"></i> Qarz kamaytirish</div>
+      <button class="modal-close" onclick="closeModal('gsRemoveModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="gsRemoveBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('gsRemoveModal')">Yopish</button>
+      <button class="btn btn-danger" id="gsWoBtn" onclick="gsDoWriteOff()"><i class="fa-solid fa-scissors"></i> Kamaytirish</button>
+    </div>
+  </div>
+</div>
+
+<!-- Qidiruvdan: PUL TARIXI -->
+<div class="modal-overlay" id="gsHistoryModal">
+  <div class="modal">
+    <div class="modal-header">
+      <div class="modal-title" id="gsHistoryTitle"><i class="fa-solid fa-clock-rotate-left"></i> Pul tarixi</div>
+      <button class="modal-close" onclick="closeModal('gsHistoryModal')"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+    <div class="modal-body" id="gsHistoryBody"></div>
+    <div class="modal-footer">
+      <button class="btn btn-sm btn-unblock" onclick="DB.sendHistoryPDF(gsType, gsCustId, this)"><i class="fa-solid fa-paper-plane"></i> PDF botga</button>
+      <button class="btn btn-danger btn-sm" onclick="gsClearHistory()"><i class="fa-solid fa-trash"></i> Tarixni o'chirish</button>
+      <button class="btn btn-ghost" onclick="closeModal('gsHistoryModal')">Yopish</button>
+    </div>
+  </div>
+</div>
+
 <!-- PDF overlay -->
 <div id="pdfOverlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.8);z-index:9999;
   align-items:center;justify-content:center;flex-direction:column;gap:16px;backdrop-filter:blur(6px)">
@@ -456,7 +627,7 @@ function handleImportFile(input) {
 <script src="report.js"></script>
 <script>
 DB.checkLogin();
-Cloud.pull();
+Cloud.pull().then(() => gsRender());
 
 function setStatus(msg) { document.getElementById('pdfStatus').textContent = msg; }
 function showLoader(on) { document.getElementById('pdfOverlay').style.display = on ? 'flex' : 'none'; }
@@ -473,6 +644,252 @@ async function exportAllPDF() {
     alert('❌ Xato: ' + (res.error || "Noma'lum xato"));
   }
 }
+
+// ─── Uchala bazadan mijoz qidirish ───────────────────────────
+// Topilgan mijozga shu yerning o'zidan qarz yozish, kamaytirish va tarixini
+// ko'rish mumkin — har bir amal mijoz qaysi bazada bo'lsa, o'sha bazada bajariladi.
+const GS_BASES = [
+  { key: 'postoyanniy', label: 'Постоянный', icon: 'fa-star' },
+  { key: 'optom',       label: 'Оптом',      icon: 'fa-boxes-stacked' },
+  { key: 'klient',      label: 'Клиент',     icon: 'fa-user' }
+];
+const GS_LIMIT = 50;
+let gsTimer = null;
+let gsType = '', gsCustId = '', gsCustName = '';
+
+function closeModal(id) { document.getElementById(id).classList.remove('show'); }
+
+function gsEsc(v) {
+  return String(v == null ? '' : v).replace(/[&<>"']/g, ch =>
+    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[ch]));
+}
+
+function gsBaseBadge(type) {
+  const b = GS_BASES.find(x => x.key === type);
+  return `<span class="gs-base gs-base-${type}"><i class="fa-solid ${b.icon}"></i> ${b.label}</span>`;
+}
+
+function gsHighlight(name, q) {
+  const n = String(name || '');
+  const i = q ? n.toLowerCase().indexOf(q) : -1;
+  if (i < 0) return gsEsc(n);
+  return gsEsc(n.slice(0, i)) + '<mark>' + gsEsc(n.slice(i, i + q.length)) + '</mark>' + gsEsc(n.slice(i + q.length));
+}
+
+function gsSchedule() {
+  clearTimeout(gsTimer);
+  gsTimer = setTimeout(gsRender, 180);
+}
+
+function gsClearInput() {
+  const inp = document.getElementById('gsInput');
+  inp.value = '';
+  gsRender();
+  inp.focus();
+}
+
+function gsRender() {
+  const raw = document.getElementById('gsInput').value.trim();
+  const q = raw.toLowerCase();
+  const qDigits = raw.replace(/\D/g, '');
+  const box = document.getElementById('gsResults');
+  const meta = document.getElementById('gsMeta');
+  document.getElementById('gsClear').style.display = raw ? 'block' : 'none';
+
+  if (!q) {
+    meta.textContent = '';
+    box.innerHTML = `<div class="gs-empty"><i class="fa-solid fa-users-viewfinder"></i>Mijoz ismi yoki telefon raqamini yozing.<br>Постоянный, Оптом va Клиент bazalaridan birdaniga qidiriladi.</div>`;
+    return;
+  }
+
+  const found = [];
+  GS_BASES.forEach(({ key }) => {
+    const debtBy = {}, overdueBy = {};
+    DB.getDebts(key).forEach(d => {
+      debtBy[d.customerId] = (debtBy[d.customerId] || 0) + (Number(d.remaining) || 0);
+      if (!overdueBy[d.customerId] && DB.isDebtOverdue(d, key)) overdueBy[d.customerId] = true;
+    });
+    DB.getCustomers(key).forEach(c => {
+      const name = String(c.name || '').toLowerCase();
+      const byName = name.includes(q);
+      const byPhone = qDigits.length >= 3 && String(c.phone || '').replace(/\D/g, '').includes(qDigits);
+      if (!byName && !byPhone) return;
+      found.push({ type: key, c, debt: debtBy[c.id] || 0, overdue: !!overdueBy[c.id], starts: name.startsWith(q) ? 1 : 0 });
+    });
+  });
+
+  // Ism boshidan mos kelganlar oldin, keyin qarzi kattalar
+  found.sort((a, b) => (b.starts - a.starts) || (b.debt - a.debt) || String(a.c.name).localeCompare(String(b.c.name)));
+
+  if (!found.length) {
+    meta.textContent = '';
+    box.innerHTML = `<div class="gs-empty"><i class="fa-solid fa-user-slash"></i>«${gsEsc(raw)}» bo'yicha hech kim topilmadi</div>`;
+    return;
+  }
+
+  const counts = {};
+  found.forEach(x => { counts[x.type] = (counts[x.type] || 0) + 1; });
+  meta.innerHTML = `<strong style="color:#fff">${found.length}</strong> ta topildi` +
+    GS_BASES.filter(b => counts[b.key]).map(b => ` · ${b.label}: ${counts[b.key]}`).join('');
+
+  const rows = found.slice(0, GS_LIMIT).map(x => {
+    const c = x.c;
+    const cls = c.blocked ? 'is-blocked' : (x.overdue ? 'has-overdue' : (x.debt > 0 ? 'has-debt' : ''));
+    const badges = gsBaseBadge(x.type) +
+      (!c.blocked && x.overdue ? `<span class="overdue-badge" style="font-size:10px"><i class="fa-solid fa-triangle-exclamation"></i> 2+ oy</span>` : '') +
+      (c.blocked ? `<span class="badge badge-black" style="font-size:10px"><i class="fa-solid fa-ban"></i> Bloklangan</span>` : '');
+    const actions = c.blocked ? '' :
+      `<button class="btn-plus" title="Qarz yozish" onclick="gsOpenDebt('${x.type}','${c.id}')">+</button>
+       <button class="btn-minus" title="Qarz kamaytirish" onclick="gsOpenRemove('${x.type}','${c.id}')">−</button>`;
+    return `<div class="gs-row ${cls}">
+      <div class="gs-info">
+        <div class="gs-name"><span>${gsHighlight(c.name, q)}</span>${badges}</div>
+        <div class="gs-phone"><i class="fa-solid fa-phone" style="font-size:10px;margin-right:4px"></i>${gsEsc(c.phone || '—')}</div>
+      </div>
+      <div class="gs-debt ${x.debt > 0 ? '' : 'zero'}">${x.debt > 0 ? DB.fmt(x.debt) + " so'm" : "Qarz yo'q"}</div>
+      <div class="gs-btns">
+        ${actions}
+        <button class="gs-hist" title="Pul tarixi" onclick="gsOpenHistory('${x.type}','${c.id}')"><i class="fa-solid fa-clock-rotate-left"></i></button>
+      </div>
+    </div>`;
+  }).join('');
+
+  const more = found.length > GS_LIMIT
+    ? `<div class="gs-more">Yana ${found.length - GS_LIMIT} ta — qidiruvni aniqroq yozing</div>` : '';
+  box.innerHTML = rows + more;
+}
+
+function gsFind(type, id) { return DB.getCustomers(type).find(x => x.id === id); }
+
+function gsCustHeader(type, c) {
+  return `<div style="background:var(--bg3);padding:12px 14px;border-radius:10px;margin-bottom:16px;font-size:14px;display:flex;align-items:center;justify-content:space-between;gap:10px">
+    <div><span style="color:var(--text2);font-size:12px">Mijoz:</span><strong style="margin-left:6px">${gsEsc(c.name)}</strong></div>
+    ${gsBaseBadge(type)}
+  </div>`;
+}
+
+// ─── Qarz yozish ─────────────────────────────────────────────
+function gsOpenDebt(type, id) {
+  const c = gsFind(type, id);
+  if (!c) return;
+  gsType = type; gsCustId = id; gsCustName = c.name;
+  document.getElementById('gsDebtBody').innerHTML = gsCustHeader(type, c) + `
+    <div class="input-group" style="margin-bottom:14px">
+      <label><i class="fa-solid fa-money-bill-wave"></i> Qarz summasi (so'm)</label>
+      <input type="number" id="gsDebtAmount" placeholder="100000" min="1" onkeydown="if(event.key==='Enter')gsSaveDebt()">
+    </div>
+    <div class="input-group">
+      <label><i class="fa-solid fa-pen-to-square"></i> Izoh (ixtiyoriy)</label>
+      <input type="text" id="gsDebtNote" onkeydown="if(event.key==='Enter')gsSaveDebt()">
+    </div>`;
+  document.getElementById('gsDebtModal').classList.add('show');
+  setTimeout(() => document.getElementById('gsDebtAmount').focus(), 100);
+}
+
+function gsSaveDebt() {
+  const amount = Number(document.getElementById('gsDebtAmount').value);
+  const note = document.getElementById('gsDebtNote').value || '';
+  if (!amount || amount <= 0) { alert('Summa kiriting!'); return; }
+  const debt = DB.addDebt(gsType, { customerId: gsCustId, customerName: gsCustName, meatType: '', pricePerKg: amount, kg: 1, note });
+  TG.notifyDebt(DB.getTypeName(gsType), debt.customerName, debt.meatType, debt.kg, debt.total);
+  closeModal('gsDebtModal');
+  gsRender();
+}
+
+// ─── Qarz kamaytirish ────────────────────────────────────────
+function gsOpenRemove(type, id) {
+  const c = gsFind(type, id);
+  if (!c) return;
+  gsType = type; gsCustId = id; gsCustName = c.name;
+
+  const debts = DB.getDebts(type).filter(d => d.customerId === id && d.remaining > 0);
+  const totalDebt = debts.reduce((s, d) => s + d.remaining, 0);
+  const activeNums = new Set(debts.map(d => d.num));
+  const events = DB.getCustomerHistory(type, id).slice().sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  let body = gsCustHeader(type, c);
+  if (!events.length && !debts.length) {
+    body += `<div style="text-align:center;color:var(--green);padding:20px"><i class="fa-solid fa-check"></i> Faol qarz yo'q</div>`;
+  } else {
+    const rows = events.map(h => {
+      if (h.kind === 'debt') {
+        const late = activeNums.has(h.debtNum) && DB.isOverdue(h.createdAt);
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+          <div>
+            <span style="color:var(--red-light);font-weight:600"><i class="fa-solid fa-arrow-up" style="font-size:10px"></i> Qo'shildi</span>
+            <span style="color:var(--text2);margin-left:8px">${h.debtNum ? '#' + h.debtNum + ' • ' : ''}${DB.fmtDate(h.createdAt)}</span>
+            ${h.note ? `<div style="font-size:11px;color:var(--text2)">${gsEsc(h.note)}</div>` : ''}
+          </div>
+          <span style="font-weight:700;color:${late ? 'var(--overdue)' : 'var(--red-light)'}">−${DB.fmt(h.amount)} so'm${late ? ' ⏰' : ''}</span>
+        </div>`;
+      }
+      return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border);font-size:13px">
+        <div>
+          <span style="color:var(--green);font-weight:600"><i class="fa-solid fa-arrow-down" style="font-size:10px"></i> To'landi</span>
+          <span style="color:var(--text2);margin-left:8px">${DB.fmtDate(h.createdAt)} • ${DB.fmtTime(h.createdAt)}</span>
+        </div>
+        <span style="font-weight:700;color:var(--green)">+${DB.fmt(h.amount)} so'm</span>
+      </div>`;
+    }).join('');
+    body += `<div style="margin-bottom:16px;border:1px solid var(--border);border-radius:10px;padding:10px 14px;max-height:260px;overflow-y:auto">
+      ${rows}
+      ${totalDebt > 0 ? `<div style="display:flex;justify-content:space-between;padding-top:10px;font-weight:700;font-size:14px">
+        <span>Jami qarz:</span><span style="color:var(--red-light)">${DB.fmt(totalDebt)} so'm</span></div>` : ''}
+    </div>`;
+  }
+  if (totalDebt > 0) {
+    body += `<div class="input-group">
+      <label><i class="fa-solid fa-scissors"></i> Qancha kamaytirish? (so'm)</label>
+      <input type="number" id="gsWoAmount" placeholder="Summa kiriting" min="1" max="${totalDebt}" onkeydown="if(event.key==='Enter')gsDoWriteOff()">
+    </div>`;
+  }
+
+  document.getElementById('gsRemoveBody').innerHTML = body;
+  document.getElementById('gsWoBtn').style.display = totalDebt > 0 ? '' : 'none';
+  document.getElementById('gsRemoveModal').classList.add('show');
+  setTimeout(() => { const i = document.getElementById('gsWoAmount'); if (i) i.focus(); }, 100);
+}
+
+function gsDoWriteOff() {
+  const input = document.getElementById('gsWoAmount');
+  const amount = Number(input ? input.value : 0);
+  if (!amount || amount <= 0) { alert('Summa kiriting!'); return; }
+  const totalDebt = DB.getDebts(gsType)
+    .filter(d => d.customerId === gsCustId && d.remaining > 0)
+    .reduce((s, d) => s + d.remaining, 0);
+  if (amount > totalDebt) { alert(`Maksimal: ${DB.fmt(totalDebt)} so'm`); return; }
+  DB.writeOffCustomerDebt(gsType, gsCustId, amount);
+  DB.addWriteOffPayment(gsType, gsCustId, gsCustName, amount);
+  DB.logHistory(gsType, { customerId: gsCustId, customerName: gsCustName, kind: 'payment', amount, note: 'Qarz kamaytirildi' });
+  TG.notifyPayment(DB.getTypeName(gsType), gsCustName, amount);
+  closeModal('gsRemoveModal');
+  gsRender();
+}
+
+// ─── Pul tarixi ──────────────────────────────────────────────
+function gsOpenHistory(type, id) {
+  const c = gsFind(type, id);
+  gsType = type; gsCustId = id; gsCustName = c ? c.name : '';
+  document.getElementById('gsHistoryTitle').innerHTML =
+    `<i class="fa-solid fa-clock-rotate-left"></i> Pul tarixi ${gsBaseBadge(type)}`;
+  document.getElementById('gsHistoryBody').innerHTML = DB.buildHistoryHTML(type, id, c ? c.name : '');
+  document.getElementById('gsHistoryModal').classList.add('show');
+}
+
+function gsClearHistory() {
+  if (!DB.getCustomerHistory(gsType, gsCustId).length) { alert("Tarix allaqachon bo'sh!"); return; }
+  const pass = prompt("Tarixni butunlay o'chirish uchun parol kiriting:");
+  if (pass === null) return;
+  if (pass !== '12345') { alert("Parol noto'g'ri!"); return; }
+  DB.clearCustomerHistory(gsType, gsCustId);
+  gsOpenHistory(gsType, gsCustId);
+}
+
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.modal-overlay.show').forEach(m => m.classList.remove('show'));
+});
+
+gsRender();
 </script>
 </body>
 </html>
