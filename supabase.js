@@ -12,7 +12,7 @@
 // O'chirish ham qatorni yo'q qilmaydi — faqat _del belgisi qo'yiladi.
 const Cloud = {
   _url: 'https://fkizqvhgkqhjmzbuufcr.supabase.co',
-  _key: 'sb_publishable_IXsZC_7OdHAq08BtPTrjJw_wGvpF96z',
+  _apiKey: 'sb_publishable_IXsZC_7OdHAq08BtPTrjJw_wGvpF96z',
 
   QUEUE_KEY: 'gm_sync_queue',
   BATCH: 200,
@@ -28,8 +28,8 @@ const Cloud = {
 
   _h(extra) {
     const h = {
-      'apikey': this._key,
-      'Authorization': 'Bearer ' + this._key,
+      'apikey': this._apiKey,
+      'Authorization': 'Bearer ' + this._apiKey,
       'Content-Type': 'application/json'
     };
     return extra ? Object.assign(h, extra) : h;
@@ -69,18 +69,18 @@ const Cloud = {
   // Navbatda faqat HAVOLA saqlanadi: qaysi baza, qaysi to'plam, qaysi yozuv.
   // Yozuvning o'zi yuborish paytida o'qiladi — shuning uchun navbat kichik
   // bo'ladi va doim eng oxirgi holat yuboriladi.
-  _key(e) { return e.t + '|' + e.c + '|' + (e.i || ''); },
+  _qkey(e) { return e.t + '|' + e.c + '|' + (e.i || ''); },
 
   _reindex() {
     this._index = {};
     const q = this._load();
-    for (let n = 0; n < q.length; n++) this._index[this._key(q[n])] = n;
+    for (let n = 0; n < q.length; n++) this._index[this._qkey(q[n])] = n;
   },
 
   _enqueue(entry) {
     const q = this._load();
     if (!this._index) this._reindex();
-    const k = this._key(entry);
+    const k = this._qkey(entry);
     if (this._index[k] === undefined) { this._index[k] = q.length; q.push(entry); }
     this._save();
     this._later();
@@ -140,8 +140,8 @@ const Cloud = {
 
       // Faqat yuborilganlarini navbatdan olib tashlaymiz
       const sent = {};
-      batch.forEach(e => { sent[this._key(e)] = true; });
-      this._pending = this._load().filter(e => !sent[this._key(e)]);
+      batch.forEach(e => { sent[this._qkey(e)] = true; });
+      this._pending = this._load().filter(e => !sent[this._qkey(e)]);
       this._reindex();
       this._saveNow();
       this._fails = 0;
