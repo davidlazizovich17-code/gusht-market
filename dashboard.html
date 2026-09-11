@@ -131,6 +131,7 @@
     </div>
     <div class="modal-body" id="historyModalBody"></div>
     <div class="modal-footer">
+      <button class="btn btn-sm btn-unblock" onclick="DB.sendHistoryPDF(TYPE, _histCustId, this)"><i class="fa-solid fa-paper-plane"></i> PDF botga</button>
       <button class="btn btn-danger btn-sm" onclick="clearHistory()"><i class="fa-solid fa-trash"></i> Tarixni o'chirish</button>
       <button class="btn btn-ghost" onclick="closeModal('historyModal')">Yopish</button>
     </div>

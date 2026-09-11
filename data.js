@@ -435,6 +435,110 @@ const DB = {
       <div style="border:1px solid var(--border);border-radius:10px;padding:6px 14px;max-height:320px;overflow-y:auto">${rows}</div>`;
   },
 
+  // Mijozning pul tarixini PDF qilib Telegram botga yuboradi.
+  // btn — bosilgan tugma (yuborish paytida o'chirib turiladi).
+  async sendHistoryPDF(type, customerId, btn) {
+    const c = this.getCustomers(type).find(x => x.id === customerId);
+    const items = this.getCustomerHistory(type, customerId)
+      .slice()
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    if (!items.length) { alert("Tarix bo'sh — yuboradigan narsa yo'q"); return; }
+
+    const oldHtml = btn ? btn.innerHTML : '';
+    if (btn) { btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Yuborilmoqda...'; }
+    try {
+      if (typeof Report !== 'undefined' && Report._ensureLibs) await Report._ensureLibs();
+      if (!window.jspdf || !window.jspdf.jsPDF) { alert('PDF kutubxonasi yuklanmadi. Internetni tekshiring.'); return; }
+
+      const { jsPDF } = window.jspdf;
+      const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const name = c ? c.name : (items[items.length - 1].customerName || '');
+      const typeName = this.getTypeName(type);
+      const dateStr = new Date().toLocaleDateString('uz-UZ');
+      const money = n => Number(n || 0).toLocaleString('uz-UZ') + " so'm";
+
+      // PDF shrifti (helvetica) kirill va boshqa maxsus harflarni ko'rsata olmaydi —
+      // ular o'rniga g'alati belgilar chiqadi. Shuning uchun PDF matnini lotinga o'giramiz.
+      const CYR = { 'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo', 'ж': 'j', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm', 'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u', 'ф': 'f', 'х': 'x', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'sh', 'ъ': "'", 'ы': 'i', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya', 'ў': "o'", 'қ': 'q', 'ғ': "g'", 'ҳ': 'h' };
+      const lat = s => Array.from(String(s == null ? '' : s)).map(ch => {
+        const lo = ch.toLowerCase();
+        if (CYR[lo] !== undefined) { const t = CYR[lo]; return ch !== lo && t ? t.charAt(0).toUpperCase() + t.slice(1) : t; }
+        if (ch === '–' || ch === '—') return '-';
+        if (ch === '‘' || ch === '’' || ch === 'ʻ' || ch === 'ʼ') return "'";
+        return ch.charCodeAt(0) > 255 ? '' : ch;
+      }).join('');
+
+      const given    = items.filter(h => h.kind === 'debt').reduce((s, h) => s + Number(h.amount || 0), 0);
+      const received = items.filter(h => h.kind === 'payment').reduce((s, h) => s + Number(h.amount || 0), 0);
+      const left     = this.getCustomerDebt(type, customerId);
+
+      doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+      doc.text('Pul tarixi', 105, 15, { align: 'center' });
+      doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+      doc.text(`Mijoz: ${lat(name)}`, 14, 24);
+      doc.text(`Telefon: ${c && c.phone ? lat(c.phone) : '-'}`, 14, 30);
+      doc.text(`Tizim: ${lat(typeName)}`, 120, 24);
+      doc.text(`Sana: ${dateStr}`, 120, 30);
+
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(192, 57, 43); doc.text(`Berilgan (qarz): ${money(given)}`, 14, 39);
+      doc.setTextColor(39, 174, 96);  doc.text(`Olingan (to'lov): ${money(received)}`, 14, 45);
+      doc.setTextColor(0, 0, 0);      doc.text(`Hozirgi qarz: ${money(left)}`, 120, 39);
+      doc.setFont('helvetica', 'normal');
+
+      const body = items.map((h, i) => {
+        const isDebt = h.kind === 'debt';
+        return [
+          String(i + 1),
+          this.fmtDate(h.createdAt) + ' ' + this.fmtTime(h.createdAt),
+          isDebt ? 'Qarz' : "To'lov",
+          h.debtNum ? '#' + h.debtNum : '',
+          lat(h.note || ''),
+          (isDebt ? '-' : '+') + money(h.amount)
+        ];
+      });
+
+      doc.autoTable({
+        startY: 51,
+        head: [['#', 'Sana va vaqt', 'Turi', 'Raqam', 'Izoh', 'Summa']],
+        body,
+        styles: { fontSize: 8.5, cellPadding: 2.5, lineColor: [210, 210, 210], lineWidth: 0.25, overflow: 'linebreak' },
+        headStyles: { fillColor: [192, 57, 43], textColor: 255, fontStyle: 'bold' },
+        alternateRowStyles: { fillColor: [248, 248, 248] },
+        columnStyles: {
+          0: { cellWidth: 9, halign: 'center' },
+          1: { cellWidth: 34 },
+          2: { cellWidth: 18 },
+          3: { cellWidth: 16 },
+          4: { cellWidth: 70 },
+          5: { cellWidth: 35, halign: 'right' }
+        },
+        didParseCell(data) {
+          if (data.section === 'body' && data.column.index === 5) {
+            data.cell.styles.textColor = body[data.row.index][2] === 'Qarz' ? [192, 57, 43] : [39, 174, 96];
+            data.cell.styles.fontStyle = 'bold';
+          }
+        }
+      });
+
+      const blob = doc.output('blob');
+      const safe = String(name).replace(/[^A-Za-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'mijoz';
+      const fname = `tarix_${safe}_${new Date().toISOString().split('T')[0]}.pdf`;
+      const caption =
+        `📜 Pul tarixi\n👤 ${name}\n📂 ${typeName}\n` +
+        `🔴 Berilgan: ${money(given)}\n🟢 Olingan: ${money(received)}\n` +
+        `💰 Hozirgi qarz: ${money(left)}\n📅 ${dateStr} (${items.length} ta yozuv)`;
+
+      const res = typeof TG !== 'undefined' ? await TG.sendDocument(blob, fname, caption) : null;
+      if (res && res.ok) alert('✅ Tarix PDF qilib botga yuborildi!');
+      else alert('❌ Yuborilmadi: ' + ((res && res.description) || 'Internet yoki bot xatosi'));
+    } catch (e) {
+      alert('❌ Xato: ' + e.message);
+    } finally {
+      if (btn) { btn.disabled = false; btn.innerHTML = oldHtml; }
+    }
+  },
+
   // ─── Computed ─────────────────────────────────────────────────────────────
   isOverdue(dateStr) {
     return (Date.now() - new Date(dateStr).getTime()) > 60 * 24 * 60 * 60 * 1000;
