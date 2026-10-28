@@ -16,8 +16,8 @@ const Report = {
   ],
 
   // PDF dagi doimiy so'zlar. Kirill shrifti yuklansa CYR, bo'lmasa LAT.
-  L_CYR: { tel: 'Тел.:', debt: 'долг', pay: 'оплата', total: 'ИТОГ', cur: 'сум', ttl: 'Барча қарзлар', page: 'бет' },
-  L_LAT: { tel: 'Tel.:', debt: 'qarz', pay: "to'lov", total: 'JAMI', cur: "so'm", ttl: 'Barcha qarzlar', page: 'bet' },
+  L_CYR: { tel: 'Тел.:', debt: 'долг', pay: 'оплата', total: 'ИТОГ', cur: 'сум', ttl: 'Барча қарзлар', page: 'бет', old: 'эски қолдиқ' },
+  L_LAT: { tel: 'Tel.:', debt: 'qarz', pay: "to'lov", total: 'JAMI', cur: "so'm", ttl: 'Barcha qarzlar', page: 'bet', old: 'eski qoldiq' },
 
   FONT_URL: 'https://cdn.jsdelivr.net/npm/dejavu-fonts-ttf@2.37.3/ttf/',
   _fonts: undefined,
@@ -128,23 +128,52 @@ const Report = {
       let totalSum = 0, debtCount = 0;
       this.TYPE_LIST.forEach(t => {
         const base = cyr ? t.cyr : t.lat;
+
+        // Mijoz bo'yicha bir marta guruhlab olamiz — har biri uchun butun
+        // ro'yxatni qayta aylanib chiqmaslik uchun
+        const histBy = {};
+        DB.getHistory(t.key).forEach(h => {
+          (histBy[h.customerId] = histBy[h.customerId] || []).push(h);
+        });
+        const debtBy = {};
+        DB.getDebts(t.key).forEach(d => {
+          if (Number(d.remaining) > 0) {
+            debtBy[d.customerId] = (debtBy[d.customerId] || 0) + Number(d.remaining);
+          }
+        });
+
         DB.getCustomers(t.key).filter(c => !c.blocked).forEach(c => {
-          const debts = DB.getDebts(t.key)
-            .filter(d => d.customerId === c.id && d.remaining > 0)
+          const debt = debtBy[c.id] || 0;
+          if (debt <= 0) return;
+
+          // Mijozning to'liq pul tarixi: bergani (+) va olingani (-)
+          const hist = (histBy[c.id] || []).slice()
             .sort((x, y) => new Date(x.createdAt) - new Date(y.createdAt));
-          if (!debts.length) return;
-          const rows = [];
-          let sum = 0;
-          debts.forEach(d => {
-            // Qarz to'liq summasi bilan, to'langani alohida minus qator bo'lib
-            // chiqadi — shunda ITOG aynan hozirgi qarzga teng bo'ladi.
-            rows.push({ date: d.createdAt, label: L.debt + ' №' + d.num, amount: Number(d.total) || 0, neg: false });
-            if (Number(d.paid) > 0) rows.push({ date: d.createdAt, label: L.pay, amount: Number(d.paid), neg: true });
-            sum += Number(d.remaining) || 0;
-            debtCount++;
+
+          let bal = 0;
+          const rows = hist.map(h => {
+            const neg = h.kind !== 'debt';
+            const amt = Number(h.amount) || 0;
+            bal += neg ? -amt : amt;
+            if (!neg) debtCount++;
+            return {
+              date: h.createdAt,
+              label: neg ? L.pay : (L.debt + (h.debtNum ? ' №' + h.debtNum : '')),
+              amount: amt,
+              neg
+            };
           });
-          items.push({ name: T(c.name), phone: T(c.phone || '-'), base, rows, total: sum });
-          totalSum += sum;
+
+          // Eski yozuvlarda tarix to'liq bo'lmasligi mumkin. Farqni "eski
+          // qoldiq" qilib boshiga qo'yamiz — shunda qatorlar yig'indisi
+          // ITOG ga aniq teng chiqadi.
+          const diff = Math.round(debt - bal);
+          if (Math.abs(diff) >= 1) {
+            rows.unshift({ date: null, label: L.old, amount: Math.abs(diff), neg: diff < 0 });
+          }
+
+          items.push({ name: T(c.name), phone: T(c.phone || '-'), base, rows, total: debt });
+          totalSum += debt;
         });
       });
 
@@ -156,7 +185,9 @@ const Report = {
       const colX = [M, M + colW + GUT];
       const TOP = 16, BOT = PH - 9;
       const HEAD = 11, ROW = 4.4, FOOT = 6.6, GAP = 4;
-      const NAVY = [22, 54, 92], GREY = [92, 102, 116], DARK = [62, 62, 62], RED = [150, 40, 40];
+      const NAVY = [22, 54, 92], GREY = [92, 102, 116], DARK = [62, 62, 62];
+      const RED = [176, 42, 42];    // olingani (to'lov)
+      const GREEN = [21, 115, 56];  // bergani (qarz)
       const BORDER = [186, 198, 212], HEADBG = [221, 229, 238], FOOTBG = [238, 242, 247];
 
       // Haqiqiy qalin shrift bo'lsa o'shani, bo'lmasa ikki marta chizib
@@ -214,10 +245,10 @@ const Report = {
 
         let ry = y + HEAD + 3.5;
         rows.forEach(r => {
-          plain(this._dmy(r.date), x + 3, ry, 7.3, DARK);
+          plain(r.date ? this._dmy(r.date) : '', x + 3, ry, 7.3, DARK);
           plain(r.label, x + 20, ry, 7.3, DARK);
           bold((r.neg ? '-' : '+') + this._num(r.amount), x + colW - 3, ry, 7.6,
-               r.neg ? RED : NAVY, 'right');
+               r.neg ? RED : GREEN, 'right');
           ry += ROW;
         });
 
