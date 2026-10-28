@@ -941,12 +941,30 @@ function gsOpenHistory(type, id) {
   gsType = type; gsCustId = id; gsCustName = c ? c.name : '';
   document.getElementById('gsHistoryTitle').innerHTML =
     `<i class="fa-solid fa-clock-rotate-left"></i> Pul tarixi ${gsBaseBadge(type)}`;
-  document.getElementById('gsHistoryBody').innerHTML = DB.buildHistoryHTML(type, id, c ? c.name : '');
+  document.getElementById('gsHistoryBody').innerHTML =
+    gsTermLine(type, id) + DB.buildHistoryHTML(type, id, c ? c.name : '');
   document.getElementById('gsHistoryModal').classList.add('show');
 }
 
 // ─── Muddatni o'zgartirish ───────────────────────────────────
 let gsTermDays = 60, gsTermAdd = 0;
+
+// Tarix oynasining tepasida joriy muddatni ko'rsatadi
+function gsTermLine(type, id) {
+  const g = DB.getGrace(type, id);
+  const left = g.until ? Math.ceil((new Date(g.until).getTime() - Date.now()) / 864e5) : 0;
+  const has = left > 0;
+  const bg = has ? 'rgba(243,156,18,0.10)' : 'var(--bg3)';
+  const bd = has ? 'rgba(243,156,18,0.35)' : 'var(--border)';
+  const right = has
+    ? `<span style="color:var(--yellow);font-weight:700">To'lov sanasi: ${gsFmtDay(new Date(g.until))} &middot; ${left} kun qoldi</span>`
+    : `<span style="color:var(--text2)">Qo'shimcha muddat yo'q</span>`;
+  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+      background:${bg};border:1px solid ${bd};border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px">
+    <span style="color:var(--text2)"><i class="fa-solid fa-calendar-day" style="margin-right:6px"></i>Muddat: <b style="color:var(--text)">${g.days} kun</b></span>
+    ${right}
+  </div>`;
+}
 
 function gsFmtDay(d) {
   const p = n => String(n).padStart(2, '0');
@@ -1029,6 +1047,8 @@ function gsSaveTerm() {
   if (!DB.setGrace(gsType, gsCustId, gsTermDays, until)) { alert("Saqlanmadi: mijoz topilmadi"); return; }
   closeModal('gsTermModal');
   gsRender();
+  // Orqada ochiq turgan tarix oynasidagi muddat qatorini yangilaymiz
+  if (document.getElementById('gsHistoryModal').classList.contains('show')) gsOpenHistory(gsType, gsCustId);
   alert("✅ Muddat saqlandi" + (until ? "\nTo'lov sanasi: " + gsFmtDay(new Date(until)) : ''));
 }
 
