@@ -534,3 +534,58 @@ tr:hover td { background: rgba(255,255,255,0.02); }
   .sidebar { width: 200px; }
   .main { margin-left: 200px; }
 }
+
+/* ─── MUDDAT OYNASI (uchala sahifada ishlatiladi) ─────────────────────────── */
+.btn-term { background: rgba(243,156,18,0.12); color: var(--yellow); border: 1px solid rgba(243,156,18,0.35); }
+.btn-term:hover { background: rgba(243,156,18,0.22); }
+.btn-save { background: var(--green); color: #fff; border: 1px solid var(--green); font-weight: 700; }
+.btn-save:hover { background: #2ecc71; }
+
+.tm-name { font-size: 16px; font-weight: 700; color: #fff; }
+.tm-lbl  { font-size: 12px; color: var(--text2); margin-top: 12px; }
+.tm-sum  { font-size: 21px; font-weight: 800; color: var(--red-light); margin-top: 2px; }
+.tm-hr   { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
+.tm-h    { font-size: 14px; font-weight: 700; color: #fff; }
+.tm-sub  { font-size: 12px; color: var(--text2); margin-top: 3px; }
+
+.tm-step { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.tm-step button {
+  width: 56px; height: 48px; flex-shrink: 0; cursor: pointer;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 11px;
+  color: var(--text); font-size: 22px; font-weight: 700; line-height: 1;
+  transition: background 0.15s;
+}
+.tm-step button:hover { background: #363636; }
+.tm-val {
+  flex: 1; height: 48px; line-height: 48px; text-align: center;
+  background: var(--bg3); border: 1px solid var(--border); border-radius: 11px;
+  font-size: 16px; font-weight: 700; color: #fff;
+}
+
+.tm-add { font-size: 14px; font-weight: 700; color: var(--yellow); margin-top: 22px; }
+.tm-cap { font-size: 12px; color: var(--text2); font-weight: 600; margin-top: 12px; }
+.tm-inp { position: relative; margin-top: 7px; }
+.tm-inp input {
+  width: 100%; height: 50px; padding: 0 56px 0 15px; box-sizing: border-box;
+  background: var(--bg2); border: 1.5px solid rgba(243,156,18,0.55); border-radius: 11px;
+  color: #fff; font-size: 16px; font-weight: 600; outline: none;
+}
+.tm-inp input:focus { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(243,156,18,0.14); }
+.tm-inp span { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: var(--text2); font-size: 14px; }
+.tm-hint { font-size: 11.5px; color: var(--text2); margin-top: 7px; }
+
+.tm-out { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-top: 18px; }
+.tm-out .o-lbl  { font-size: 12px; color: var(--text2); }
+.tm-out .o-val  { font-size: 23px; font-weight: 800; color: #fff; margin-top: 3px; }
+.tm-out .o-note { font-size: 12px; color: var(--yellow); margin-top: 7px; display: flex; align-items: center; gap: 7px; }
+.tm-out .o-note i { width: 7px; height: 7px; border-radius: 50%; background: var(--yellow); display: inline-block; }
+
+/* Telefonda tugmalar ikki ustunga joylashsin */
+@media (max-width: 560px) {
+  #historyModal .modal-footer,
+  #gsHistoryModal .modal-footer,
+  #dbTermModal .modal-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  #historyModal .modal-footer .btn,
+  #gsHistoryModal .modal-footer .btn,
+  #dbTermModal .modal-footer .btn { width: 100%; justify-content: center; text-align: center; }
+}

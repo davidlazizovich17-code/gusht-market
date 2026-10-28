@@ -392,59 +392,6 @@
   background: rgba(255, 255, 255, 0.3);
 }
 
-/* ── Muddatni o'zgartirish oynasi ─────────────────────────── */
-.btn-term { background: rgba(243,156,18,0.12); color: var(--yellow); border: 1px solid rgba(243,156,18,0.35); }
-.btn-term:hover { background: rgba(243,156,18,0.22); }
-.btn-save { background: var(--green); color: #fff; border: 1px solid var(--green); font-weight: 700; }
-.btn-save:hover { background: #2ecc71; }
-
-.tm-name { font-size: 16px; font-weight: 700; color: #fff; }
-.tm-lbl  { font-size: 12px; color: var(--text2); margin-top: 12px; }
-.tm-sum  { font-size: 21px; font-weight: 800; color: var(--red-light); margin-top: 2px; }
-.tm-hr   { border: 0; border-top: 1px solid var(--border); margin: 18px 0; }
-.tm-h    { font-size: 14px; font-weight: 700; color: #fff; }
-.tm-sub  { font-size: 12px; color: var(--text2); margin-top: 3px; }
-
-.tm-step { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
-.tm-step button {
-  width: 56px; height: 48px; flex-shrink: 0; cursor: pointer;
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 11px;
-  color: var(--text); font-size: 22px; font-weight: 700; line-height: 1;
-  transition: background 0.15s;
-}
-.tm-step button:hover { background: #363636; }
-.tm-val {
-  flex: 1; height: 48px; line-height: 48px; text-align: center;
-  background: var(--bg3); border: 1px solid var(--border); border-radius: 11px;
-  font-size: 16px; font-weight: 700; color: #fff;
-}
-
-.tm-add { font-size: 14px; font-weight: 700; color: var(--yellow); margin-top: 22px; }
-.tm-cap { font-size: 12px; color: var(--text2); font-weight: 600; margin-top: 12px; }
-.tm-inp { position: relative; margin-top: 7px; }
-.tm-inp input {
-  width: 100%; height: 50px; padding: 0 56px 0 15px; box-sizing: border-box;
-  background: var(--bg2); border: 1.5px solid rgba(243,156,18,0.55); border-radius: 11px;
-  color: #fff; font-size: 16px; font-weight: 600; outline: none;
-}
-.tm-inp input:focus { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(243,156,18,0.14); }
-.tm-inp span { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: var(--text2); font-size: 14px; }
-.tm-hint { font-size: 11.5px; color: var(--text2); margin-top: 7px; }
-
-.tm-out { background: var(--bg3); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; margin-top: 18px; }
-.tm-out .o-lbl  { font-size: 12px; color: var(--text2); }
-.tm-out .o-val  { font-size: 23px; font-weight: 800; color: #fff; margin-top: 3px; }
-.tm-out .o-note { font-size: 12px; color: var(--yellow); margin-top: 7px; display: flex; align-items: center; gap: 7px; }
-.tm-out .o-note i { width: 7px; height: 7px; border-radius: 50%; background: var(--yellow); display: inline-block; }
-
-/* Telefonda tugmalar ikki ustunga joylashsin */
-@media (max-width: 560px) {
-  #gsHistoryModal .modal-footer,
-  #gsTermModal .modal-footer { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  #gsHistoryModal .modal-footer .btn,
-  #gsTermModal .modal-footer .btn { width: 100%; justify-content: center; text-align: center; }
-}
-
 /* ── Responsive ──────────────────────────────────────────── */
 @media (max-width: 960px) {
   .select-main { grid-template-columns: 1fr; max-width: 560px; }
@@ -663,21 +610,6 @@ function handleImportFile(input) {
       <button class="btn btn-sm btn-term" onclick="gsOpenTerm()"><i class="fa-solid fa-calendar-day"></i> Muddatni o'zgartirish</button>
       <button class="btn btn-danger btn-sm" onclick="gsClearHistory()"><i class="fa-solid fa-trash"></i> Tarixni o'chirish</button>
       <button class="btn btn-ghost" onclick="closeModal('gsHistoryModal')">Yopish</button>
-    </div>
-  </div>
-</div>
-
-<!-- Qidiruvdan: MUDDATNI O'ZGARTIRISH -->
-<div class="modal-overlay" id="gsTermModal">
-  <div class="modal" style="max-width:430px">
-    <div class="modal-header">
-      <div class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> Muddatni o'zgartirish</div>
-      <button class="modal-close" onclick="closeModal('gsTermModal')"><i class="fa-solid fa-xmark"></i></button>
-    </div>
-    <div class="modal-body" id="gsTermBody"></div>
-    <div class="modal-footer">
-      <button class="btn btn-ghost" onclick="closeModal('gsTermModal')">Bekor qilish</button>
-      <button class="btn btn-save" onclick="gsSaveTerm()">Saqlash</button>
     </div>
   </div>
 </div>
@@ -942,114 +874,16 @@ function gsOpenHistory(type, id) {
   document.getElementById('gsHistoryTitle').innerHTML =
     `<i class="fa-solid fa-clock-rotate-left"></i> Pul tarixi ${gsBaseBadge(type)}`;
   document.getElementById('gsHistoryBody').innerHTML =
-    gsTermLine(type, id) + DB.buildHistoryHTML(type, id, c ? c.name : '');
+    DB.termLine(type, id) + DB.buildHistoryHTML(type, id, c ? c.name : '');
   document.getElementById('gsHistoryModal').classList.add('show');
 }
 
-// ─── Muddatni o'zgartirish ───────────────────────────────────
-let gsTermDays = 60, gsTermAdd = 0;
-
-// Tarix oynasining tepasida joriy muddatni ko'rsatadi
-function gsTermLine(type, id) {
-  const g = DB.getGrace(type, id);
-  const left = g.until ? Math.ceil((new Date(g.until).getTime() - Date.now()) / 864e5) : 0;
-  const has = left > 0;
-  const bg = has ? 'rgba(243,156,18,0.10)' : 'var(--bg3)';
-  const bd = has ? 'rgba(243,156,18,0.35)' : 'var(--border)';
-  const right = has
-    ? `<span style="color:var(--yellow);font-weight:700">To'lov sanasi: ${gsFmtDay(new Date(g.until))} &middot; ${left} kun qoldi</span>`
-    : `<span style="color:var(--text2)">Qo'shimcha muddat yo'q</span>`;
-  return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
-      background:${bg};border:1px solid ${bd};border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px">
-    <span style="color:var(--text2)"><i class="fa-solid fa-calendar-day" style="margin-right:6px"></i>Muddat: <b style="color:var(--text)">${g.days} kun</b></span>
-    ${right}
-  </div>`;
-}
-
-function gsFmtDay(d) {
-  const p = n => String(n).padStart(2, '0');
-  return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear();
-}
-
+// Muddat oynasi data.js da — uchala sahifa bir xil kodni ishlatadi
 function gsOpenTerm() {
-  const c = gsFind(gsType, gsCustId);
-  if (!c) { alert("Mijoz topilmadi"); return; }
-  const g = DB.getGrace(gsType, gsCustId);
-  gsTermDays = g.days;
-  gsTermAdd = 0;
-  if (g.until) {
-    const left = Math.ceil((new Date(g.until).getTime() - Date.now()) / 864e5);
-    if (left > 0) gsTermAdd = left;
-  }
-  document.getElementById('gsTermBody').innerHTML = `
-    <div class="tm-name">${gsEsc(c.name)}</div>
-    <div class="tm-lbl">Joriy qarz</div>
-    <div class="tm-sum">${DB.fmt(DB.getCustomerDebt(gsType, gsCustId))} so'm</div>
-    <hr class="tm-hr">
-    <div class="tm-h">Asosiy muddat</div>
-    <div class="tm-sub">Qarz berilgan kundan</div>
-    <div class="tm-step">
-      <button type="button" onclick="gsTermStep(-5)">&minus;</button>
-      <div class="tm-val" id="gsTermVal"></div>
-      <button type="button" onclick="gsTermStep(5)">+</button>
-    </div>
-    <div class="tm-add">+ Muddat qo'shish</div>
-    <div class="tm-sub">Bugundan boshlab</div>
-    <div class="tm-cap">Kun soni</div>
-    <div class="tm-inp">
-      <input type="number" id="gsTermAddInp" min="0" max="365" value="${gsTermAdd}" oninput="gsTermCalc()">
-      <span>kun</span>
-    </div>
-    <div class="tm-hint">Kun sonini kiriting</div>
-    <div class="tm-out">
-      <div class="o-lbl">To'lov sanasi</div>
-      <div class="o-val" id="gsTermDate">—</div>
-      <div class="o-note" id="gsTermNote"></div>
-    </div>`;
-  gsTermCalc();
-  document.getElementById('gsTermModal').classList.add('show');
-}
-
-function gsTermStep(n) {
-  gsTermDays = Math.max(5, Math.min(365, gsTermDays + n));
-  gsTermCalc();
-}
-
-function gsTermCalc() {
-  const inp = document.getElementById('gsTermAddInp');
-  let add = Math.round(Number(inp && inp.value) || 0);
-  if (!(add > 0)) add = 0;
-  if (add > 365) { add = 365; if (inp) inp.value = 365; }
-  gsTermAdd = add;
-
-  const vEl = document.getElementById('gsTermVal');
-  if (vEl) vEl.textContent = gsTermDays + ' kun';
-
-  let date = null, note = '';
-  if (add > 0) {
-    date = new Date(Date.now() + add * 864e5);
-    note = add + " kun qo'shiladi";
-  } else {
-    // Qo'shimcha muddat yo'q — asosiy muddat bo'yicha eng eski qarzdan hisoblanadi
-    const debts = DB.getDebts(gsType).filter(d => d.customerId === gsCustId && d.remaining > 0);
-    if (debts.length) {
-      const oldest = debts.reduce((m, d) => new Date(d.createdAt) < new Date(m.createdAt) ? d : m);
-      date = new Date(new Date(oldest.createdAt).getTime() + gsTermDays * 864e5);
-      note = 'Asosiy muddat bo\'yicha';
-    }
-  }
-  document.getElementById('gsTermDate').textContent = date ? gsFmtDay(date) : '—';
-  document.getElementById('gsTermNote').innerHTML = note ? '<i></i>' + note : '';
-}
-
-function gsSaveTerm() {
-  const until = gsTermAdd > 0 ? new Date(Date.now() + gsTermAdd * 864e5).toISOString() : null;
-  if (!DB.setGrace(gsType, gsCustId, gsTermDays, until)) { alert("Saqlanmadi: mijoz topilmadi"); return; }
-  closeModal('gsTermModal');
-  gsRender();
-  // Orqada ochiq turgan tarix oynasidagi muddat qatorini yangilaymiz
-  if (document.getElementById('gsHistoryModal').classList.contains('show')) gsOpenHistory(gsType, gsCustId);
-  alert("✅ Muddat saqlandi" + (until ? "\nTo'lov sanasi: " + gsFmtDay(new Date(until)) : ''));
+  DB.openTerm(gsType, gsCustId, () => {
+    gsRender();
+    if (document.getElementById('gsHistoryModal').classList.contains('show')) gsOpenHistory(gsType, gsCustId);
+  });
 }
 
 function gsClearHistory() {

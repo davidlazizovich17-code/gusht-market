@@ -132,6 +132,7 @@
     <div class="modal-body" id="historyModalBody"></div>
     <div class="modal-footer">
       <button class="btn btn-sm btn-unblock" onclick="DB.sendHistoryPDF(TYPE, _histCustId, this)"><i class="fa-solid fa-paper-plane"></i> PDF botga</button>
+      <button class="btn btn-sm btn-term" onclick="openTermModal()"><i class="fa-solid fa-calendar-day"></i> Muddatni o'zgartirish</button>
       <button class="btn btn-danger btn-sm" onclick="clearHistory()"><i class="fa-solid fa-trash"></i> Tarixni o'chirish</button>
       <button class="btn btn-ghost" onclick="closeModal('historyModal')">Yopish</button>
     </div>
@@ -473,8 +474,16 @@ function openHistoryModal(custId) {
   _histCustId = custId;
   const c = DB.getCustomers(TYPE).find(x => x.id === custId);
   document.getElementById('historyModalBody').innerHTML =
-    DB.buildHistoryHTML(TYPE, custId, c ? c.name : '');
+    DB.termLine(TYPE, custId) + DB.buildHistoryHTML(TYPE, custId, c ? c.name : '');
   document.getElementById('historyModal').classList.add('show');
+}
+
+// Muddat oynasi data.js da — uchala sahifa bir xil kodni ishlatadi
+function openTermModal() {
+  DB.openTerm(TYPE, _histCustId, () => {
+    renderList();
+    if (document.getElementById('historyModal').classList.contains('show')) openHistoryModal(_histCustId);
+  });
 }
 
 function clearHistory() {

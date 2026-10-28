@@ -588,6 +588,150 @@ const DB = {
     return true;
   },
 
+  // ─── Muddat oynasi ────────────────────────────────────────────────────────
+  // Uchala bazada ham, bosh sahifadagi qidiruvda ham shu bitta kod ishlaydi.
+  _term: { type: '', id: '', days: 60, add: 0, onSaved: null },
+
+  fmtDay(d) {
+    const p = n => String(n).padStart(2, '0');
+    return p(d.getDate()) + '.' + p(d.getMonth() + 1) + '.' + d.getFullYear();
+  },
+
+  _esc(v) {
+    return String(v == null ? '' : v).replace(/[&<>"']/g, ch =>
+      ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]);
+  },
+
+  // Tarix oynasining tepasida chiqadigan joriy muddat qatori
+  termLine(type, customerId) {
+    const g = this.getGrace(type, customerId);
+    const left = g.until ? Math.ceil((new Date(g.until).getTime() - Date.now()) / 864e5) : 0;
+    const has = left > 0;
+    const right = has
+      ? `<span style="color:var(--yellow);font-weight:700">To'lov sanasi: ${this.fmtDay(new Date(g.until))} &middot; ${left} kun qoldi</span>`
+      : `<span style="color:var(--text2)">Qo'shimcha muddat yo'q</span>`;
+    return `<div style="display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;
+        background:${has ? 'rgba(243,156,18,0.10)' : 'var(--bg3)'};
+        border:1px solid ${has ? 'rgba(243,156,18,0.35)' : 'var(--border)'};
+        border-radius:10px;padding:10px 14px;margin-bottom:14px;font-size:13px">
+      <span style="color:var(--text2)"><i class="fa-solid fa-calendar-day" style="margin-right:6px"></i>Muddat: <b style="color:var(--text)">${g.days} kun</b></span>
+      ${right}
+    </div>`;
+  },
+
+  // Oyna har bir sahifada yoziladigan HTML emas — kerak bo'lganda o'zi quriladi
+  _termEl() {
+    let el = document.getElementById('dbTermModal');
+    if (el) return el;
+    el = document.createElement('div');
+    el.className = 'modal-overlay';
+    el.id = 'dbTermModal';
+    el.innerHTML =
+      `<div class="modal" style="max-width:430px">
+        <div class="modal-header">
+          <div class="modal-title"><i class="fa-solid fa-clock-rotate-left"></i> Muddatni o'zgartirish</div>
+          <button class="modal-close" onclick="DB.closeTerm()"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div class="modal-body" id="dbTermBody"></div>
+        <div class="modal-footer">
+          <button class="btn btn-ghost" onclick="DB.closeTerm()">Bekor qilish</button>
+          <button class="btn btn-save" onclick="DB.saveTerm()">Saqlash</button>
+        </div>
+      </div>`;
+    document.body.appendChild(el);
+    return el;
+  },
+
+  closeTerm() {
+    const el = document.getElementById('dbTermModal');
+    if (el) el.classList.remove('show');
+  },
+
+  // onSaved — saqlangach chaqiriladi (ro'yxatni va tarix oynasini yangilash uchun)
+  openTerm(type, customerId, onSaved) {
+    const c = this.getCustomers(type).find(x => x.id === customerId);
+    if (!c) { alert('Mijoz topilmadi'); return; }
+    const g = this.getGrace(type, customerId);
+    let add = 0;
+    if (g.until) {
+      const left = Math.ceil((new Date(g.until).getTime() - Date.now()) / 864e5);
+      if (left > 0) add = left;
+    }
+    this._term = { type, id: customerId, days: g.days, add, onSaved: onSaved || null };
+    this._termEl();
+    document.getElementById('dbTermBody').innerHTML = `
+      <div class="tm-name">${this._esc(c.name)}</div>
+      <div class="tm-lbl">Joriy qarz</div>
+      <div class="tm-sum">${this.fmt(this.getCustomerDebt(type, customerId))} so'm</div>
+      <hr class="tm-hr">
+      <div class="tm-h">Asosiy muddat</div>
+      <div class="tm-sub">Qarz berilgan kundan</div>
+      <div class="tm-step">
+        <button type="button" onclick="DB.termStep(-5)">&minus;</button>
+        <div class="tm-val" id="dbTermVal"></div>
+        <button type="button" onclick="DB.termStep(5)">+</button>
+      </div>
+      <div class="tm-add">+ Muddat qo'shish</div>
+      <div class="tm-sub">Bugundan boshlab</div>
+      <div class="tm-cap">Kun soni</div>
+      <div class="tm-inp">
+        <input type="number" id="dbTermAdd" min="0" max="365" value="${add}" oninput="DB.termCalc()">
+        <span>kun</span>
+      </div>
+      <div class="tm-hint">Kun sonini kiriting</div>
+      <div class="tm-out">
+        <div class="o-lbl">To'lov sanasi</div>
+        <div class="o-val" id="dbTermDate">—</div>
+        <div class="o-note" id="dbTermNote"></div>
+      </div>`;
+    this.termCalc();
+    document.getElementById('dbTermModal').classList.add('show');
+  },
+
+  termStep(n) {
+    this._term.days = Math.max(5, Math.min(365, this._term.days + n));
+    this.termCalc();
+  },
+
+  termCalc() {
+    const t = this._term;
+    const inp = document.getElementById('dbTermAdd');
+    let add = Math.round(Number(inp && inp.value) || 0);
+    if (!(add > 0)) add = 0;
+    if (add > 365) { add = 365; if (inp) inp.value = 365; }
+    t.add = add;
+
+    const vEl = document.getElementById('dbTermVal');
+    if (vEl) vEl.textContent = t.days + ' kun';
+
+    let date = null, note = '';
+    if (add > 0) {
+      date = new Date(Date.now() + add * 864e5);
+      note = add + " kun qo'shiladi";
+    } else {
+      // Qo'shimcha muddat yo'q — asosiy muddat eng eski ochiq qarzdan hisoblanadi
+      const debts = this.getDebts(t.type).filter(d => d.customerId === t.id && d.remaining > 0);
+      if (debts.length) {
+        const oldest = debts.reduce((m, d) => new Date(d.createdAt) < new Date(m.createdAt) ? d : m);
+        date = new Date(new Date(oldest.createdAt).getTime() + t.days * 864e5);
+        note = "Asosiy muddat bo'yicha";
+      }
+    }
+    const dEl = document.getElementById('dbTermDate');
+    const nEl = document.getElementById('dbTermNote');
+    if (dEl) dEl.textContent = date ? this.fmtDay(date) : '—';
+    if (nEl) nEl.innerHTML = note ? '<i></i>' + note : '';
+  },
+
+  saveTerm() {
+    const t = this._term;
+    const until = t.add > 0 ? new Date(Date.now() + t.add * 864e5).toISOString() : null;
+    if (!this.setGrace(t.type, t.id, t.days, until)) { alert('Saqlanmadi: mijoz topilmadi'); return; }
+    this.closeTerm();
+    if (typeof t.onSaved === 'function') { try { t.onSaved(); } catch (e) {} }
+    alert('✅ Muddat saqlandi' + (until ? "\nTo'lov sanasi: " + this.fmtDay(new Date(until)) : ''));
+  },
+
   isDebtOverdue(debt, type) {
     const t = type || this._currentType;
     const g = t ? this.getGrace(t, debt.customerId) : { days: this.GRACE_DEFAULT, until: null };
