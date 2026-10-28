@@ -561,11 +561,41 @@ const DB = {
   // Qarz "qizil" (2+ oy) bo'ladi: qarz yozilganiga 2 oydan oshgan VA mijoz
   // oxirgi 2 oy ichida umuman to'lov (minus) qilmagan bo'lsa. Qandaydir summa
   // to'langan bo'lsa — 2 oylik muddat qayta boshlanadi, qizilga tushmaydi.
+  // ─── Muddat ───────────────────────────────────────────────────────────────
+  // Har bir mijozga alohida muddat berish mumkin:
+  //   graceDays — qarz berilgan kundan boshlab necha kun (standart 60)
+  //   dueUntil  — shu sana kelmaguncha qarz "qizil" bo'lmaydi (qo'shimcha muddat)
+  GRACE_DEFAULT: 60,
+
+  _past(dateStr, days) {
+    return (Date.now() - new Date(dateStr).getTime()) > days * 24 * 60 * 60 * 1000;
+  },
+
+  getGrace(type, customerId) {
+    const c = this._list(type, 'customers').find(x => x.id === customerId);
+    const d = c && Number(c.graceDays) > 0 ? Number(c.graceDays) : this.GRACE_DEFAULT;
+    return { days: d, until: (c && c.dueUntil) || null };
+  },
+
+  setGrace(type, customerId, days, until) {
+    const list = this._list(type, 'customers');
+    const c = list.find(x => x.id === customerId);
+    if (!c) return false;
+    c.graceDays = Math.max(1, Math.round(Number(days) || this.GRACE_DEFAULT));
+    c.dueUntil = until || null;
+    this._touch(type, 'customers', c);
+    this.saveCustomers(type, list);
+    return true;
+  },
+
   isDebtOverdue(debt, type) {
     const t = type || this._currentType;
-    if (!this.isOverdue(debt.createdAt)) return false;
+    const g = t ? this.getGrace(t, debt.customerId) : { days: this.GRACE_DEFAULT, until: null };
+    // Qo'shimcha muddat berilgan bo'lsa, o'sha sana kelmaguncha qizil bo'lmaydi
+    if (g.until && Date.now() < new Date(g.until).getTime()) return false;
+    if (!this._past(debt.createdAt, g.days)) return false;
     const lastPay = t ? this.lastPaymentDate(t, debt.customerId) : null;
-    return !(lastPay && !this.isOverdue(lastPay));
+    return !(lastPay && !this._past(lastPay, g.days));
   },
 
   debtStatus(debt, type) {
