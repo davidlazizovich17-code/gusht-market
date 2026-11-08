@@ -130,7 +130,17 @@ async function supaWrite(id, data) {
   const dry     = !enabled || forced;
 
   if (!email || !secret) {
-    console.error('XATO: ESKIZ_EMAIL yoki ESKIZ_PASSWORD berilmagan.');
+    const miss = [];
+    if (!email)  miss.push('ESKIZ_EMAIL');
+    if (!secret) miss.push('ESKIZ_PASSWORD');
+    console.error('XATO: quyidagi sirlar topilmadi: ' + miss.join(', '));
+    console.error('Mavjud sozlamalar (qiymatlari ko\'rsatilmaydi):');
+    ['ESKIZ_EMAIL', 'ESKIZ_PASSWORD', 'SMS_ENABLED', 'FORCE_DRY'].forEach(k => {
+      const v = process.env[k];
+      console.error('   ' + k + ' = ' + (v ? '[bor, ' + v.length + ' belgi]' : '[YO\'Q]'));
+    });
+    console.error("GitHub > Settings > Secrets and variables > Actions sahifasida");
+    console.error("nomlar aynan shunday yozilganini tekshiring (Variables emas, Secrets).");
     process.exit(1);
   }
 
