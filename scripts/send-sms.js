@@ -116,6 +116,73 @@ async function supaFetchAll() {
   return rows;
 }
 
+// Telegram sozlamalari saytning o'z faylidan o'qiladi — nusxalash shart emas.
+function readTelegramConfig() {
+  const src = fs.readFileSync(path.join(__dirname, '..', 'telegram.js'), 'utf8');
+  const tok = src.match(/TOKEN:\s*'([^']+)'/);
+  const cid = src.match(/CHAT_ID:\s*'([^']+)'/);
+  if (!tok || !cid) throw new Error("telegram.js dan token/chat o'qilmadi");
+  return { token: tok[1], chat: cid[1] };
+}
+
+// Kimga yuborilgani haqida PDF tuzib, botga jo'natadi.
+// Ismlar lotinga o'girilgani uchun oddiy shrift yetarli.
+async function sendReportPdf(rows, meta) {
+  const { jsPDF } = require('jspdf');
+  require('jspdf-autotable');
+
+  const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+  const W = doc.internal.pageSize.getWidth();
+
+  doc.setFont('helvetica', 'bold').setFontSize(15);
+  doc.text(meta.dry ? 'SMS ro\u2019yxati (sinov)' : 'SMS yuborildi', 40, 46);
+  doc.setFont('helvetica', 'normal').setFontSize(10).setTextColor(90);
+  doc.text(meta.when, W - 40, 46, { align: 'right' });
+
+  doc.setTextColor(0).setFontSize(10);
+  const head = (meta.dry
+    ? [`Jami: ${meta.total} ta`, 'Hech narsa yuborilmadi (sinov rejimi)']
+    : [`Jami: ${meta.total} ta`, `Yetib bordi: ${meta.ok} ta`, `Xato: ${meta.err} ta`]
+  ).concat(`Narx: ${numSp(meta.cost)} so'm${meta.ad ? ' (reklama tarifi)' : ''}`).join('     ');
+  doc.text(head, 40, 66);
+
+  doc.autoTable({
+    startY: 82,
+    head: [['#', 'Ism', 'Telefon', "Qarz, so'm", 'Holat']],
+    body: rows.map((x, n) => [
+      String(n + 1), x.name, '+' + x.phone, numSp(x.debt),
+      meta.dry ? 'sinov' : (x.ok ? 'yetdi' : (x.err || 'xato'))
+    ]),
+    styles: { font: 'helvetica', fontSize: 9, cellPadding: 4 },
+    headStyles: { fillColor: [45, 55, 72], textColor: 255, fontStyle: 'bold' },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: {
+      0: { cellWidth: 32, halign: 'right' },
+      2: { cellWidth: 92 },
+      3: { cellWidth: 78, halign: 'right' },
+      4: { cellWidth: 62 }
+    },
+    didParseCell: d => {
+      const okTxt = meta.dry ? 'sinov' : 'yetdi';
+      if (d.section === 'body' && d.column.index === 4 && d.cell.raw !== okTxt) {
+        d.cell.styles.textColor = [200, 30, 30];
+      }
+    }
+  });
+
+  const buf = Buffer.from(doc.output('arraybuffer'));
+  const { token, chat } = readTelegramConfig();
+  const fd = new FormData();
+  fd.append('chat_id', chat);
+  fd.append('caption', meta.dry
+    ? `SINOV: ${meta.total} ta nomzod, ${numSp(meta.cost)} so'm — hech narsa yuborilmadi`
+    : `SMS yuborildi: ${meta.ok}/${meta.total} ta, ${numSp(meta.cost)} so'm`);
+  fd.append('document', new Blob([buf], { type: 'application/pdf' }), meta.file);
+  const r = await fetch(`https://api.telegram.org/bot${token}/sendDocument`, { method: 'POST', body: fd });
+  const j = await r.json().catch(() => ({}));
+  if (!j || !j.ok) throw new Error('Telegram javobi: ' + JSON.stringify(j).slice(0, 200));
+}
+
 async function supaWrite(id, data) {
   const res = await fetch(SUPA, {
     method: 'POST',
@@ -278,26 +345,37 @@ async function supaWrite(id, data) {
   log(`eng uzun matn: ${maxLen} belgi ${maxLen > 160 ? '(DIQQAT: 160 dan oshdi)' : '(bitta SMS)'}`);
   if (queue.length) log('namuna:', queue[0].phone, '|', queue[0].text);
 
+  const stamp = () => new Date(Date.now() + 5 * 3600000)   // Toshkent vaqti
+                        .toISOString().slice(0, 16).replace('T', ' ');
+
+  async function report(sent, ok, err, isDry) {
+    const when = stamp();
+    try {
+      await sendReportPdf(sent, {
+        when, total: sent.length, ok, err, dry: isDry, ad: !approved,
+        cost: (isDry ? sent : sent.filter(x => x.ok)).reduce((a, x) => a + x.price, 0),
+        file: `sms_${when.slice(0, 10)}.pdf`
+      });
+      log('botga PDF hisobot yuborildi');
+    } catch (e) {
+      console.error('OGOHLANTIRISH: botga hisobot ketmadi —', e.message);
+    }
+  }
+
   if (dry) {
     log("\nSINOV REJIMI — hech narsa yuborilmadi.");
     log('Haqiqiy yuborish uchun SMS_ENABLED sirini "true" qiling.');
+    if (queue.length) await report(queue, 0, 0, true);
     return;
   }
   if (role === 'test') {
     console.error("TO'XTATILDI: hisob test rejimida — haqiqiy matn ketmaydi.");
     process.exit(1);
   }
-  // Shablon tasdiqlanmagan bo'lsa yubormaymiz — aks holda har bir xabar
-  // reklama narxida ketadi. Ertasi kuni 08:00 da o'zi qayta urinadi, ya'ni
-  // shablon tasdiqlangan kuni yuborish o'z-o'zidan boshlanadi.
-  if (!approved && String(process.env.ALLOW_AD_PRICE || '').toLowerCase() !== 'true') {
-    log("\nKUTILMOQDA: shablon hali tasdiqlanmagan.");
-    log(`Hozir yuborilsa reklama narxida ketardi — ${numSp(cost)} so'm.`);
-    log('Shu sababli bu safar hech narsa yuborilmadi.');
-    log("Ertaga 08:00 da o'zi qayta urinadi; shablon tasdiqlangan kuni");
-    log('yuborish avtomatik boshlanadi — sizdan hech narsa talab qilinmaydi.');
-    log('Shartsiz yuborish uchun ALLOW_AD_PRICE sirini "true" qiling.');
-    return;
+  // Shablon tasdiqlanmagan bo'lsa ham yuboriladi (shunday kelishilgan),
+  // faqat narx reklama tarifida ketadi — jurnalda ogohlantirib qo'yamiz.
+  if (!approved) {
+    log("\nOGOHLANTIRISH: shablon tasdiqlanmagan — reklama narxida ketadi.");
   }
   if (balance > 0 && balance < cost) {
     console.error(`TO'XTATILDI: balans yetarli emas (${numSp(balance)} < ${numSp(cost)} so'm).`);
@@ -315,10 +393,16 @@ async function supaWrite(id, data) {
     try {
       const r = await fetch(`${ESKIZ}/message/sms/send`, { method: 'POST', headers: eh, body: f });
       const j = await r.json().catch(() => ({}));
-      if (j && j.id) { ok++; sentLog[x.id] = new Date().toISOString(); }
-      else { err++; console.error('xato:', x.phone, JSON.stringify(j).slice(0, 160)); }
+      if (j && j.id) {
+        ok++; x.ok = true; sentLog[x.id] = new Date().toISOString();
+      } else {
+        err++; x.ok = false;
+        x.err = String((j && (j.message || j.status)) || 'xato').slice(0, 30);
+        console.error('xato:', x.phone, JSON.stringify(j).slice(0, 160));
+      }
     } catch (e) {
-      err++; console.error('xato:', x.phone, e.message);
+      err++; x.ok = false; x.err = e.message.slice(0, 30);
+      console.error('xato:', x.phone, e.message);
     }
     await new Promise(r => setTimeout(r, 250));
   }
@@ -327,5 +411,9 @@ async function supaWrite(id, data) {
   catch (e) { console.error('OGOHLANTIRISH:', e.message); }
 
   log(`\nyuborildi: ${ok} ta,  xato: ${err} ta`);
+
+  // 7. Botga hisobot — kimga ketgani haqida PDF
+  await report(queue, ok, err, false);
+
   if (err && !ok) process.exit(1);
 })().catch(e => { console.error('XATO:', e && e.stack || e); process.exit(1); });

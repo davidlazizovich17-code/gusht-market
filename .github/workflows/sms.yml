@@ -28,6 +28,9 @@ jobs:
         with:
           node-version: '20'
 
+      - name: PDF kutubxonalarini o'rnatish
+        run: npm install --no-save --no-audit --no-fund jspdf@2.5.2 jspdf-autotable@3.8.4
+
       - name: Skript sintaksisini tekshirish
         run: node --check scripts/send-sms.js
 
@@ -36,6 +39,5 @@ jobs:
           ESKIZ_EMAIL:    ${{ secrets.ESKIZ_EMAIL }}
           ESKIZ_PASSWORD: ${{ secrets.ESKIZ_PASSWORD }}
           SMS_ENABLED:    ${{ secrets.SMS_ENABLED }}
-          ALLOW_AD_PRICE: ${{ secrets.ALLOW_AD_PRICE }}
           FORCE_DRY:      ${{ inputs.dry }}
         run: node scripts/send-sms.js
