@@ -99,6 +99,19 @@ function phoneOf(raw) {
   return '998' + d;
 }
 
+// Bitta maydonda ikkita raqam saqlangan bo'lishi mumkin, masalan
+// "933536372   994464955 UZLARINIKI". Hammasini ajratib olamiz.
+// Butun satrni ham tekshiramiz — "+998 77 133 4849" kabi yozuvlar
+// bo'laklarga bo'linganda yo'qolib ketmasin.
+function phonesOf(raw) {
+  const s = String(raw || '');
+  const out = [];
+  const add = v => { const p = phoneOf(v); if (p && !out.includes(p)) out.push(p); };
+  s.split(/\D+/).filter(Boolean).forEach(add);
+  add(s);
+  return out;
+}
+
 // ─── Yordamchilar ──────────────────────────────────────────────────────────
 const log = (...a) => console.log(...a);
 const supaHeaders = { apikey: SUPA_KEY, Authorization: 'Bearer ' + SUPA_KEY };
@@ -243,7 +256,7 @@ async function supaWrite(id, data) {
   // yozishidan qat'i nazar ishlaydi.
   const FIXED = MESSAGE.split(/\{ISM\}|\{SUMMA\}/)
                        .map(x => x.trim()).filter(x => x.length > 8);
-  let approved = false;
+  let tplStatus = 'yo\'q';
   try {
     const tr = await (await fetch(`${ESKIZ}/user/templates`, { headers: eh })).json();
     const list = (tr && (tr.result || tr.data)) || [];
@@ -253,10 +266,17 @@ async function supaWrite(id, data) {
       const st   = String(t.status || '?');
       const mine = FIXED.every(x => txt.includes(x));
       log(`shablon #${t.id || '?'} [${st}]${mine ? '  <- bizniki' : ''}`);
-      if (mine && st === 'service') approved = true;
+      if (mine) tplStatus = st;
     }
   } catch (e) { log("shablon holati o'qilmadi:", e.message); }
-  log('shablon tasdiqlangan:', approved ? 'HA — oddiy narx' : "YO'Q — reklama narxi");
+
+  // service = xizmat matni (oddiy narx), reklama = reklama matni (qimmat).
+  // Boshqa holatda Eskiz matnni umuman yubormaydi — rad javobini qaytaradi.
+  const adMode = tplStatus === 'reklama';
+  const canSend = tplStatus === 'service' || adMode;
+  log(`shablon holati: ${tplStatus}` +
+      (canSend ? (adMode ? ' — yuborsa bo\'ladi, reklama narxi' : ' — yuborsa bo\'ladi, oddiy narx')
+               : ' — Eskiz bu matnni yubormaydi'));
 
   // 3. Ma'lumot
   const rows = await supaFetchAll();
@@ -286,6 +306,7 @@ async function supaWrite(id, data) {
   const targets = [];
   const skip = {};
   const bump = k => { skip[k] = (skip[k] || 0) + 1; };
+  let extra = 0;   // ikkinchi raqami bor mijozlar
 
   for (const t of TYPES) {
     const lastPay = {};
@@ -314,18 +335,21 @@ async function supaWrite(id, data) {
         bump("muddati o'tmagan"); continue;
       }
 
-      const phone = phoneOf(c.phone);
-      if (!phone) { bump("raqam noto'g'ri"); continue; }
+      const phones = phonesOf(c.phone);
+      if (!phones.length) { bump("raqam noto'g'ri"); continue; }
       const nm = smsName(c.name);
       if (!nm) { bump("ism bo'sh"); continue; }
+      if (phones.length > 1) extra++;
 
       const text = MESSAGE.replace('{ISM}', nm).replace('{SUMMA}', numSp(sum));
-      const base = PRICE[phone.slice(3, 5)] || 160;
-      targets.push({ id: c.id, phone, name: nm, debt: sum, text,
-                     price: approved ? base : adPrice(base) });
+      for (const phone of phones) {
+        const base = PRICE[phone.slice(3, 5)] || 160;
+        targets.push({ id: c.id, phone, name: nm, debt: sum, text,
+                       price: adMode ? adPrice(base) : base });
+      }
     }
   }
-  log(`nomzod: ${targets.length} ta`);
+  log(`nomzod: ${targets.length} ta xabar (${extra} ta mijozda ikkinchi raqam ham bor)`);
   for (const k of Object.keys(skip).sort()) log(`  chetda — ${k}: ${skip[k]}`);
 
   // 5. Yaqinda yuborilganlarni chiqaramiz
@@ -352,7 +376,7 @@ async function supaWrite(id, data) {
     const when = stamp();
     try {
       await sendReportPdf(sent, {
-        when, total: sent.length, ok, err, dry: isDry, ad: !approved,
+        when, total: sent.length, ok, err, dry: isDry, ad: adMode,
         cost: (isDry ? sent : sent.filter(x => x.ok)).reduce((a, x) => a + x.price, 0),
         file: `sms_${when.slice(0, 10)}.pdf`
       });
@@ -372,10 +396,17 @@ async function supaWrite(id, data) {
     console.error("TO'XTATILDI: hisob test rejimida — haqiqiy matn ketmaydi.");
     process.exit(1);
   }
-  // Shablon tasdiqlanmagan bo'lsa ham yuboriladi (shunday kelishilgan),
-  // faqat narx reklama tarifida ketadi — jurnalda ogohlantirib qo'yamiz.
-  if (!approved) {
-    log("\nOGOHLANTIRISH: shablon tasdiqlanmagan — reklama narxida ketadi.");
+  // Eskiz moderatsiyadan o'tmagan matnni yubormaydi: har bir so'rovga
+  // "Этот смс текст еще не прошёл модерацию" deb rad javobi qaytaradi.
+  // Shuning uchun urinib ham o'tirmaymiz — ertasi kuni 08:00 da o'zi
+  // qayta uriniadi va shablon tasdiqlangan kuni yuborish boshlanadi.
+  if (!canSend) {
+    log(`\nKUTILMOQDA: shablon holati "${tplStatus}".`);
+    log('Eskiz tasdiqlanmagan matnni yubormaydi, shuning uchun bu safar');
+    log("hech narsa yuborilmadi va pul sarflanmadi.");
+    log("Ertaga 08:00 da o'zi qayta urinadi — shablon tasdiqlangan kuni");
+    log('yuborish avtomatik boshlanadi, sizdan hech narsa talab qilinmaydi.');
+    return;
   }
   if (balance > 0 && balance < cost) {
     console.error(`TO'XTATILDI: balans yetarli emas (${numSp(balance)} < ${numSp(cost)} so'm).`);
