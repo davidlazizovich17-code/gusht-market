@@ -3,7 +3,7 @@
 //
 //  GitHub Actions da ishlaydi — kompyuter o'chiq bo'lsa ham jo'natiladi.
 //  Har kuni ishga tushadi, lekin bitta mijozga COOLDOWN_DAYS kunda bir marta
-//  yuboriladi. Shuning uchun amalda har 3 kunda bir marta boradi.
+//  yuboriladi. Shuning uchun amalda har 4 kunda bir marta boradi.
 //
 //  Kerakli maxfiy sozlamalar (GitHub > Settings > Secrets and variables):
 //    ESKIZ_EMAIL     — Eskiz hisobining pochtasi
@@ -32,7 +32,7 @@ const { url: SUPA, key: SUPA_KEY } = readSupabaseConfig();
 const MESSAGE = "Hurmatli {ISM}! Navoiy go'sht do'konidan qarzingiz: {SUMMA} SO'M. "
               + "3 kun ichida to'lang yoki bog'laning: +998933361590";
 const FROM           = '4546';
-const COOLDOWN_DAYS  = 3;     // bitta mijozga necha kunda bir marta
+const COOLDOWN_DAYS  = 4;     // bitta mijozga necha kunda bir marta
 const GRACE_DEFAULT  = 60;    // qarz necha kundan keyin "muddati o'tgan"
 const MAX_PER_RUN    = 600;   // xavfsizlik chegarasi
 const LOG_ROW        = 'sms_log';

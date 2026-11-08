@@ -1,8 +1,8 @@
 name: Qarzdorlarga SMS
 
 # Har kuni 03:00 UTC = Toshkent vaqti bilan 08:00 da ishga tushadi.
-# Bitta mijozga 3 kunda bir marta yuboriladi (skript ichida tekshiriladi),
-# shuning uchun amalda har 3 kunda bir marta boradi.
+# Bitta mijozga 4 kunda bir marta yuboriladi (skript ichida tekshiriladi),
+# shuning uchun amalda har 4 kunda bir marta boradi.
 on:
   schedule:
     - cron: '0 3 * * *'
