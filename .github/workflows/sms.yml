@@ -28,10 +28,14 @@ jobs:
         with:
           node-version: '20'
 
+      - name: Skript sintaksisini tekshirish
+        run: node --check scripts/send-sms.js
+
       - name: SMS yuborish
         env:
           ESKIZ_EMAIL:    ${{ secrets.ESKIZ_EMAIL }}
           ESKIZ_PASSWORD: ${{ secrets.ESKIZ_PASSWORD }}
           SMS_ENABLED:    ${{ secrets.SMS_ENABLED }}
+          ALLOW_AD_PRICE: ${{ secrets.ALLOW_AD_PRICE }}
           FORCE_DRY:      ${{ inputs.dry }}
         run: node scripts/send-sms.js

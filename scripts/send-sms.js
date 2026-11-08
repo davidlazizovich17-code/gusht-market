@@ -45,6 +45,11 @@ const PRICE = { '93':160,'94':160,'90':160,'91':160,'97':170,'98':170,
                 '95':145,'99':145,'77':145,'50':145,'55':145,
                 '88':95,'33':95,'20':110 };
 
+// Tasdiqlangan shablon bo'lmasa, xabar reklama deb hisoblanadi va
+// narx qariyb ikki barobar oshadi. Bu — oddiy narxdan reklama narxiga jadval.
+const AD = { 160: 350, 170: 370, 145: 350, 95: 95, 110: 110 };
+const adPrice = p => AD[p] || p * 2;
+
 // ─── Ism qoidasi ───────────────────────────────────────────────────────────
 const TITLES = ['AKA','OPA','XOLA','HOLA','BOBO','BUVA','BUVI','AMAKI','TOGA','UKA','BO'];
 const DROP   = ['KEN','ZNAK','MAGAZIN','TERSAK','KUZICHI'];
@@ -166,6 +171,26 @@ async function supaWrite(id, data) {
   const role    = (me && me.data && me.data.role) || '?';
   log(`balans: ${numSp(balance)} so'm, rejim: ${role}`);
 
+  // 2b. Shablon tasdiqlanganmi? Matnning o'zgarmas bo'laklari shablonda
+  // bor-yo'qligiga qarab aniqlaymiz — Eskiz o'zgaruvchilarni qanday
+  // yozishidan qat'i nazar ishlaydi.
+  const FIXED = MESSAGE.split(/\{ISM\}|\{SUMMA\}/)
+                       .map(x => x.trim()).filter(x => x.length > 8);
+  let approved = false;
+  try {
+    const tr = await (await fetch(`${ESKIZ}/user/templates`, { headers: eh })).json();
+    const list = (tr && (tr.result || tr.data)) || [];
+    if (!list.length) log("shablon: hali yo'q");
+    for (const t of list) {
+      const txt  = String(t.original_text || t.template || '');
+      const st   = String(t.status || '?');
+      const mine = FIXED.every(x => txt.includes(x));
+      log(`shablon #${t.id || '?'} [${st}]${mine ? '  <- bizniki' : ''}`);
+      if (mine && st === 'service') approved = true;
+    }
+  } catch (e) { log("shablon holati o'qilmadi:", e.message); }
+  log('shablon tasdiqlangan:', approved ? 'HA — oddiy narx' : "YO'Q — reklama narxi");
+
   // 3. Ma'lumot
   const rows = await supaFetchAll();
   const cust = {}, debt = {}, pays = {};
@@ -228,8 +253,9 @@ async function supaWrite(id, data) {
       if (!nm) { bump("ism bo'sh"); continue; }
 
       const text = MESSAGE.replace('{ISM}', nm).replace('{SUMMA}', numSp(sum));
+      const base = PRICE[phone.slice(3, 5)] || 160;
       targets.push({ id: c.id, phone, name: nm, debt: sum, text,
-                     price: PRICE[phone.slice(3, 5)] || 160 });
+                     price: approved ? base : adPrice(base) });
     }
   }
   log(`nomzod: ${targets.length} ta`);
@@ -260,6 +286,18 @@ async function supaWrite(id, data) {
   if (role === 'test') {
     console.error("TO'XTATILDI: hisob test rejimida — haqiqiy matn ketmaydi.");
     process.exit(1);
+  }
+  // Shablon tasdiqlanmagan bo'lsa yubormaymiz — aks holda har bir xabar
+  // reklama narxida ketadi. Ertasi kuni 08:00 da o'zi qayta urinadi, ya'ni
+  // shablon tasdiqlangan kuni yuborish o'z-o'zidan boshlanadi.
+  if (!approved && String(process.env.ALLOW_AD_PRICE || '').toLowerCase() !== 'true') {
+    log("\nKUTILMOQDA: shablon hali tasdiqlanmagan.");
+    log(`Hozir yuborilsa reklama narxida ketardi — ${numSp(cost)} so'm.`);
+    log('Shu sababli bu safar hech narsa yuborilmadi.');
+    log("Ertaga 08:00 da o'zi qayta urinadi; shablon tasdiqlangan kuni");
+    log('yuborish avtomatik boshlanadi — sizdan hech narsa talab qilinmaydi.');
+    log('Shartsiz yuborish uchun ALLOW_AD_PRICE sirini "true" qiling.');
+    return;
   }
   if (balance > 0 && balance < cost) {
     console.error(`TO'XTATILDI: balans yetarli emas (${numSp(balance)} < ${numSp(cost)} so'm).`);
