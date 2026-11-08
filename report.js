@@ -326,6 +326,124 @@ const Report = {
     if (this._timer) return;
     this._timer = setInterval(() => this._tick(), 20000);
     this._tick();
+  },
+
+  // ── Muddati o'tgan qarzdorlar ro'yxati (ixcham jadval) ─────────────────
+  // Sahifada 36 ta yozuv. Qarzi KATTA_QARZ dan oshganlar yulduzcha bilan
+  // belgilanadi va fon rangi o'zgaradi. Telefon maydoni asl holida qoladi —
+  // ikkita raqam saqlangan bo'lsa, ikkalasi ham ko'rinadi.
+  ROWS_PER_PAGE: 36,
+  BIG_DEBT: 999000,
+
+  OV_CYR: { ttl: 'Список долгов', num: '№', cli: 'Клиент', sum: 'Сумма, сум',
+            tel: 'Телефон', rec: 'Записи', of: 'из', pg: 'Страница',
+            star: '\u2606\u2606\u2606 — долг больше', cur: 'сум',
+            keep: 'Исходные номера сохранены', tot: 'Итого', mark: '\u2606\u2606\u2606' },
+  OV_LAT: { ttl: "Qarzdorlar ro'yxati", num: 'N', cli: 'Mijoz', sum: "Summa, so'm",
+            tel: 'Telefon', rec: 'Yozuv', of: '/', pg: 'Sahifa',
+            star: "*** — qarzi ortiq", cur: "so'm",
+            keep: "Raqamlar asl holida", tot: 'Jami', mark: '***' },
+
+  // Faqat PDF yasaydi va Blob qaytaradi — yuborish alohida.
+  async buildOverdueBlob(list) {
+    if (!(await this._ensureLibs())) throw new Error('PDF kutubxonasi yuklanmadi');
+    const { jsPDF } = window.jspdf;
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+
+    const cyr = await this._ensureFont(doc);
+    const F = cyr ? 'DejaVu' : 'helvetica';
+    const L = cyr ? this.OV_CYR : this.OV_LAT;
+    const T = cyr ? (v => String(v == null ? '' : v)) : (v => this._lat(v));
+
+    const PER   = this.ROWS_PER_PAGE;
+    const pages = Math.max(1, Math.ceil(list.length / PER));
+    const total = list.reduce((a, c) => a + Number(c.debt || 0), 0);
+    const today = this._dmy(new Date().toISOString()).replace(/(\d\d)$/, '20$1');
+
+    const MAROON = [139, 42, 60];
+    const TITLE  = [150, 25, 55];
+    const HI_BG  = [253, 236, 214];
+    const HI_TX  = [181, 101, 18];
+    const ALT_BG = [248, 248, 250];
+
+    for (let p = 0; p < pages; p++) {
+      if (p) doc.addPage();
+      const chunk = list.slice(p * PER, (p + 1) * PER);
+      const from  = p * PER + 1, to = p * PER + chunk.length;
+
+      doc.setFont(F, 'bold').setFontSize(13).setTextColor(...TITLE);
+      doc.text(`${T(L.ttl)} — ${today}`, 105, 13, { align: 'center' });
+
+      doc.setFont(F, 'normal').setFontSize(7.5).setTextColor(110);
+      doc.text(`${T(L.rec)} ${from}\u2013${to} ${T(L.of)} ${list.length}`
+             + `   |   ${T(L.star)} ${this._num(this.BIG_DEBT)} ${T(L.cur)}`,
+               105, 18.5, { align: 'center' });
+
+      doc.autoTable({
+        startY: 23,
+        margin: { left: 10, right: 10, bottom: 12 },
+        head: [[T(L.num), T(L.cli), T(L.sum), T(L.tel)]],
+        body: chunk.map((c, n) => {
+          const big = Number(c.debt || 0) > this.BIG_DEBT;
+          const name = T(c.name || '') + (c.note ? '\n' + T(c.note) : '');
+          return [
+            String(from + n),
+            name,
+            (big ? T(L.mark) + ' ' : '') + this._num(c.debt) + ' ' + T(L.cur),
+            T(String(c.phone || '').replace(/\s{2,}/g, '\n').trim())
+          ];
+        }),
+        styles: { font: F, fontSize: 8.5, cellPadding: { top: 1.3, bottom: 1.3, left: 2.5, right: 2.5 },
+                  lineColor: [214, 214, 220], lineWidth: 0.15, textColor: [25, 25, 30],
+                  valign: 'middle', overflow: 'linebreak' },
+        headStyles: { font: F, fontStyle: 'bold', fillColor: MAROON, textColor: 255,
+                      fontSize: 8.5, cellPadding: { top: 2, bottom: 2, left: 2, right: 2 } },
+        alternateRowStyles: { fillColor: ALT_BG },
+        columnStyles: {
+          0: { cellWidth: 11, halign: 'center', textColor: [120, 120, 128] },
+          1: { cellWidth: 78 },
+          2: { cellWidth: 50 },
+          3: { cellWidth: 51, fontSize: 8 }
+        },
+        didParseCell: d => {
+          if (d.section !== 'body') return;
+          const c = chunk[d.row.index];
+          if (c && Number(c.debt || 0) > this.BIG_DEBT) {
+            d.cell.styles.fillColor = HI_BG;
+            if (d.column.index === 2) {
+              d.cell.styles.textColor = HI_TX;
+              d.cell.styles.fontStyle = 'bold';
+            }
+          }
+        }
+      });
+
+    }
+
+    const nPages = doc.getNumberOfPages();
+    for (let n = 1; n <= nPages; n++) {
+      doc.setPage(n);
+      doc.setFont(F, 'normal').setFontSize(7).setTextColor(130);
+      doc.text(`${T(L.pg)} ${n} ${T(L.of)} ${nPages}`
+             + `   \u00b7   ${T(L.tot)}: ${this._num(total)} ${T(L.cur)}`
+             + `   \u00b7   ${T(L.keep)}`,
+               105, 291, { align: 'center' });
+    }
+
+    return doc.output('blob');
+  },
+
+  async sendOverdueList(list, typeName) {
+    let blob;
+    try { blob = await this.buildOverdueBlob(list); }
+    catch (e) { alert(e.message); return; }
+    const total = list.reduce((a, c) => a + Number(c.debt || 0), 0);
+    const fname = `qarzdorlar_${new Date().toISOString().slice(0, 10)}.pdf`;
+    const cap   = `${typeName}\nMuddati o'tgan: ${list.length} ta mijoz`
+                + `\nJami: ${this._num(total)} so'm`;
+    const res = await TG.sendDocument(blob, fname, cap);
+    if (res && res.ok) alert('PDF Telegramga yuborildi');
+    else alert('Xato: ' + ((res && res.description) || 'internet yoki bot xatosi'));
   }
 };
 

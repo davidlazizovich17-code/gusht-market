@@ -376,7 +376,7 @@ function printAllOverdue() {
     return { name: c.name, phone: c.phone, debt, note };
   });
   if (!list.length) { alert("Muddati o'tgan qarzlar yo'q!"); return; }
-  generateAndSendPDF(list);
+  Report.sendOverdueList(list, DB.getTypeName(TYPE));
 }
 
 function buildCustCard(c) {
