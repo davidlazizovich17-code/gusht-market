@@ -1,0 +1,37 @@
+name: Qarzdorlarga SMS
+
+# Har kuni 03:00 UTC = Toshkent vaqti bilan 08:00 da ishga tushadi.
+# Bitta mijozga 3 kunda bir marta yuboriladi (skript ichida tekshiriladi),
+# shuning uchun amalda har 3 kunda bir marta boradi.
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      dry:
+        description: "Sinov rejimi (hech narsa yuborilmaydi)"
+        type: boolean
+        default: true
+
+concurrency:
+  group: sms
+  cancel-in-progress: false
+
+jobs:
+  yuborish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: SMS yuborish
+        env:
+          ESKIZ_EMAIL:    ${{ secrets.ESKIZ_EMAIL }}
+          ESKIZ_PASSWORD: ${{ secrets.ESKIZ_PASSWORD }}
+          SMS_ENABLED:    ${{ secrets.SMS_ENABLED }}
+          FORCE_DRY:      ${{ inputs.dry }}
+        run: node scripts/send-sms.js
